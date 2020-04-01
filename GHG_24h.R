@@ -57,14 +57,7 @@ library(ranger)
 #### import data #### 
 
 aday <- read.csv("20190516_24h.csv", header = TRUE)
-aday_mis <- aday[0,]
 
-for (i in 1:ncol(aday_mis)){
-    if (is.factor(aday_mis[,i])){
-        aday_mis[,i] <- as.numeric(as.character(aday_mis[,i]))
-    }
-    aday_mis[1,i] <- sum(is.na(aday[,i]))
-}
 #### processing data 4C's ####
 
 aday$Date <- as.Date(aday$Date, format = "%y-%m-%d")

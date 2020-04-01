@@ -12,6 +12,7 @@ library(devtools)
 library(SOfun)
 library(usethis)
 library(reprex)
+library(lubridate)
 
 # data visualization 
 
@@ -51,32 +52,66 @@ library(Hmisc)
 library(xgboost)
 library(checkmate)
 library(ranger)
+library(rstatix)
 
 
 #### import data #### 
 
-WSP <- read.csv("20190516_WSP.csv", header = TRUE)
-WSP_mis <- WSP[0,]
+WSP <- read_csv("WSP.csv")
+WSP_24h <- read_csv("WSP_24h.csv")
 
-for (i in 1:ncol(WSP_mis)){
-    if (is.factor(WSP_mis[,i])){
-        WSP_mis[,i] <- as.numeric(as.character(WSP_mis[,i]))
-    }
-    WSP_mis[1,i] <- sum(is.na(WSP[,i]))
-}
 
-#### processing data 4C's ####
+#### 4C's process ####
 
+WSP_24h$Line <- 2
+WSP_24h$Position <- 2
+WSP$Sample <- rep(seq(1:6),3)
+WSP_24h$Pond <- str_replace_all(WSP_24h$Pond, "2","")
+
+
+WSP$Pond <- as.factor(WSP$Pond)
 WSP$Line <- as.factor(WSP$Line)
 WSP$Position <- as.factor(WSP$Position)
+WSP$Sample <- as.factor(WSP$Sample)
 
-#### Correcting dissolved gas concentrations ####
+WSP_24h$Pond <- as.factor(WSP_24h$Pond)
+WSP_24h$Line <- as.factor(WSP_24h$Line)
+WSP_24h$Position <- as.factor(WSP_24h$Position)
+WSP_24h$Sample <- as.factor(WSP_24h$Sample)
+
+WSP$Date <- dmy(WSP$Date)
+WSP$Time <- hms(WSP$Time)
+WSP_24h$Date <- dmy(WSP_24h$Date)
+WSP_24h$Time <- hms(WSP_24h$Time)
+
+
+# FP2 position 3 with mean value
+
+WSP$`BOD5 (mg/L)`[which(is.na(WSP$`BOD5 (mg/L)`))] <- mean(WSP$`BOD5 (mg/L)`[which(WSP$Pond == "FP" & WSP$Line == 2)], na.rm = TRUE)
+WSP$`COD (mg/L)`[which(is.na(WSP$`COD (mg/L)`))] <- mean(WSP$`COD (mg/L)`[which(WSP$Pond == "FP" & WSP$Line == 2)], na.rm = TRUE)
+WSP$`TN (mg/L)`[which(is.na(WSP$`TN (mg/L)`))] <- mean(WSP$`TN (mg/L)`[which(WSP$Pond == "FP" & WSP$Line == 2)], na.rm = TRUE)
+WSP$`TP (mg/L)`[which(is.na(WSP$`TP (mg/L)`))] <- mean(WSP$`TP (mg/L)`[which(WSP$Pond == "FP" & WSP$Line == 2)], na.rm = TRUE)
+
+# 24h datasets
+
+WSP_24h$`BOD5 (mg/L)`[which(is.na(WSP_24h$`BOD5 (mg/L)`) & WSP_24h$Pond == "FP")] <- mean(WSP_24h$`BOD5 (mg/L)`[which(WSP_24h$Pond == "FP")], 
+                                                                                           na.rm = TRUE)
+WSP_24h$`COD (mg/L)`[which(is.na(WSP_24h$`COD (mg/L)`) & WSP_24h$Pond == "FP")] <- mean(WSP_24h$`COD (mg/L)`[which(WSP_24h$Pond == "FP")], 
+                                                                                         na.rm = TRUE)
+WSP_24h$`TN (mg/L)`[which(is.na(WSP_24h$`TN (mg/L)`) & WSP_24h$Pond == "FP")] <- mean(WSP_24h$`TN (mg/L)`[which(WSP_24h$Pond == "FP")], 
+                                                                                       na.rm = TRUE)
+WSP_24h$`TP (mg/L)`[which(is.na(WSP_24h$`TP (mg/L)`) & WSP_24h$Pond == "FP")] <- mean(WSP_24h$`TP (mg/L)`[which(WSP_24h$Pond == "FP")], 
+                                                                                       na.rm = TRUE)
+WSP_24h$`BOD5 (mg/L)`[which(is.na(WSP_24h$`BOD5 (mg/L)`) & WSP_24h$Pond == "MP")] <- mean(WSP_24h$`BOD5 (mg/L)`[which(WSP_24h$Pond == "MP")], 
+                                                                                           na.rm = TRUE)
+
+#### WSP_Correcting dissolved gas concentrations  ####
 
 V.headspace = 6 # mL 
 V.aq        = 6 # mL
 
 R        = 1.98719   # gas constant in cal / K mol
-T        = WSP$T_w        # assumed river temperature 
+T        = WSP$`Water temperature (oC)`  # assumed river temperature 
 pressure = 2 # atm 
 
 # Henry coefficients for N2O
@@ -89,14 +124,14 @@ D.n2o    =  0.0238544
 # H = 1/exp[{-a+b/(T+273)+C*ln(T+273)+d*(T+273)}]/R	
 H.n2o    = 1/exp((A.n2o + B.n2o / (T + 273.15) + C.n2o * log(T + 273.15) + D.n2o * (T + 273.15)) / R)	
 
-Cg.n2o   = WSP$Dis_N2O_1 * 10^-6 * pressure  # vol atm N2O / vol sample; Cg
+Cg.n2o   = WSP$`N2O dissolved gas (mg/L)` * 10^-6 * pressure  # vol atm N2O / vol sample; Cg
 
 
 Ca.n2o   = 55.5 * (Cg.n2o/H.n2o) * 44 * 10^3  # mg N2O/L H2O
 Cah.n2o  = (V.headspace/V.aq * Cg.n2o * (44/22.4) * (273.15/(T + 273.15))*10^3) # mg N2O/L H2O
 
 n2o.aq   = (Ca.n2o + Cah.n2o) * 10^3 # ug N2O/L H2O
-WSP$Dis_N2O_cor <- n2o.aq
+WSP$`N2O Dissolved Gas (ug/L)` <- n2o.aq
 
 # Henry coefficients for ch4
 
@@ -108,7 +143,7 @@ D.ch4    = -0.00028503
 # HENRY's LAW
 # H = 1/exp[{-a+b/(T+273)+C*ln(T+273)+d*(T+273)}]/R	
 H.ch4    = 1/exp((A.ch4 + B.ch4 / (T + 273.15) + C.ch4 * log(T + 273.15) + D.ch4 * (T + 273.15)) / R)	
-Cg.ch4   = WSP$Dis_CH4_1 * 10^-6  * pressure # vol atm ch4 / vol sample; Cg
+Cg.ch4   = WSP$`CH4 dissolved gas (mg/L)` * 10^-6  * pressure # vol atm ch4 / vol sample; Cg
 
 Ca.ch4   = 55.5 * (Cg.ch4/H.ch4) * 16 * 10^3  # mg ch4/L H2O
 Cah.ch4  = (V.headspace/V.aq * Cg.ch4 * (16/22.4) * (273.15/(T + 273.15))*10^3) # mg ch4/L H2O
@@ -116,7 +151,7 @@ Cah.ch4  = (V.headspace/V.aq * Cg.ch4 * (16/22.4) * (273.15/(T + 273.15))*10^3) 
 ch4.aq   = (Ca.ch4 + Cah.ch4)  * 10^3 # ug ch4/L H2O
 ch4.aq
 
-WSP$Dis_CH4_cor <- ch4.aq
+WSP$`CH4 Dissolved Gas (ug/L)` <- ch4.aq
 
 # Henry coefficients for co2
 
@@ -128,414 +163,436 @@ D.co2    = -0.00219107
 # HENRY's LAW
 # H = 1/exp[{-a+b/(T+273)+C*ln(T+273)+d*(T+273)}]/R 
 H.co2    = 1/exp((A.co2 + B.co2 / (T + 273.15) + C.co2 * log(T + 273.15) + D.co2 * (T + 273.15)) / R)   
-Cg.co2   = WSP$Dis_CO2_1 * 10^-6 * pressure   # vol atm co2 / vol sample; Cg
+Cg.co2   = WSP$`CO2 dissolved gas (mg/L)` * 10^-6 * pressure   # vol atm co2 / vol sample; Cg
 
 
 Ca.co2   = 55.5 * (Cg.co2/H.co2) * 44 * 10^3  # mg co2/L H2O
 Cah.co2  = (V.headspace/V.aq * Cg.co2 * (44/22.4) * (273.15/(T + 273.15))*10^3) # mg co2/L H2O
 
-co2.aq   = (Ca.co2 + Cah.co2)  # mg co2/L H2O
+co2.aq   = (Ca.co2 + Cah.co2)*10^3  # ug co2/L H2O
 co2.aq
 
-WSP$Dis_CO2_cor <- co2.aq
+WSP$`CO2 Dissolved Gas (ug/L)` <- co2.aq
 
-#### Boxplot of all countinuous variables regarding ponds #### 
+#### WSP_24h_Correcting dissolved gas concentrations  ####
 
-# This  is for make a list of graphs
+V.headspace = 6 # mL 
+V.aq        = 6 # mL
 
-plot_WSP <- function(data, column, column2){
-    ggplot(data) +
-        geom_boxplot(aes_string(x = column2 , y = column)) +
-        xlab(column2) +
-        ylab(column) 
-}
+R        = 1.98719   # gas constant in cal / K mol
+T        = WSP_24h$`Water temperature (oC)`  # assumed river temperature 
+pressure = 2 # atm 
 
-plot_pond <- lapply(colnames(WSP)[7:27], plot_WSP, data = WSP, column2 = "Pond")
- 
-# print the graphs
+# Henry coefficients for N2O
+A.n2o    = -180.95   
+B.n2o    =  13205.8     
+C.n2o    =  20.0399   
+D.n2o    =  0.0238544
 
-lapply(plot_pond, print)
+# HENRY's LAW
+# H = 1/exp[{-a+b/(T+273)+C*ln(T+273)+d*(T+273)}]/R	
+H.n2o    = 1/exp((A.n2o + B.n2o / (T + 273.15) + C.n2o * log(T + 273.15) + D.n2o * (T + 273.15)) / R)	
 
-# save the graphs into folder
+Cg.n2o   = WSP_24h$`N2O dissolved gas (mg/L)` * 10^-6 * pressure  # vol atm N2O / vol sample; Cg
+
+
+Ca.n2o   = 55.5 * (Cg.n2o/H.n2o) * 44 * 10^3  # mg N2O/L H2O
+Cah.n2o  = (V.headspace/V.aq * Cg.n2o * (44/22.4) * (273.15/(T + 273.15))*10^3) # mg N2O/L H2O
+
+n2o.aq   = (Ca.n2o + Cah.n2o) * 10^3 # ug N2O/L H2O
+WSP_24h$`N2O Dissolved Gas (ug/L)` <- n2o.aq
+
+# Henry coefficients for ch4
+
+A.ch4    = -365.183    
+B.ch4    =  18106.7      
+C.ch4    =  49.7554    
+D.ch4    = -0.00028503 
+
+# HENRY's LAW
+# H = 1/exp[{-a+b/(T+273)+C*ln(T+273)+d*(T+273)}]/R	
+H.ch4    = 1/exp((A.ch4 + B.ch4 / (T + 273.15) + C.ch4 * log(T + 273.15) + D.ch4 * (T + 273.15)) / R)	
+Cg.ch4   = WSP_24h$`CH4 dissolved gas (mg/L)` * 10^-6  * pressure # vol atm ch4 / vol sample; Cg
+
+Ca.ch4   = 55.5 * (Cg.ch4/H.ch4) * 16 * 10^3  # mg ch4/L H2O
+Cah.ch4  = (V.headspace/V.aq * Cg.ch4 * (16/22.4) * (273.15/(T + 273.15))*10^3) # mg ch4/L H2O
+
+ch4.aq   = (Ca.ch4 + Cah.ch4)  * 10^3 # ug ch4/L H2O
+ch4.aq
+
+WSP_24h$`CH4 Dissolved Gas (ug/L)` <- ch4.aq
+
+# Henry coefficients for co2
+
+A.co2    = -317.658    
+B.co2    =  1737.12     
+C.co2    =  43.0607    
+D.co2    = -0.00219107 
+
+# HENRY's LAW
+# H = 1/exp[{-a+b/(T+273)+C*ln(T+273)+d*(T+273)}]/R 
+H.co2    = 1/exp((A.co2 + B.co2 / (T + 273.15) + C.co2 * log(T + 273.15) + D.co2 * (T + 273.15)) / R)   
+Cg.co2   = WSP_24h$`CO2 dissolved gas (mg/L)` * 10^-6 * pressure   # vol atm co2 / vol sample; Cg
+
+
+Ca.co2   = 55.5 * (Cg.co2/H.co2) * 44 * 10^3  # mg co2/L H2O
+Cah.co2  = (V.headspace/V.aq * Cg.co2 * (44/22.4) * (273.15/(T + 273.15))*10^3) # mg co2/L H2O
+
+co2.aq   = (Ca.co2 + Cah.co2)*10^3  # ug co2/L H2O
+co2.aq
+
+WSP_24h$`CO2 Dissolved Gas (ug/L)` <- co2.aq
+
+#### Combine two dataset ####
+WSP_both <- bind_rows(WSP, WSP_24h)
+WSP_both$Time <- c(WSP$Time, WSP_24h$Time)
+
+WSP_both$Pond <- as.factor(WSP_both$Pond)
+WSP_both$Line <- as.factor(WSP_both$Line)
+WSP_both$Position <- as.factor(WSP_both$Position)
+WSP_both$Sample <- as.factor(WSP_both$Sample)
+
+
+#### Correct_Boxplot_Fluxes per ponds ####
+#** WSP no separation between lines ####
+
+WSP_fluxes <- WSP %>% select(Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
+    pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
+WSP_fluxes$GHGs <- as.factor(WSP_fluxes$GHGs)
+WSP_fluxes$GHGs <- relevel(WSP_fluxes$GHGs,"Flux_CO2 (mg.m-2.d-1)")
+WSP_fluxes$GHGs <- factor(WSP_fluxes$GHGs,
+                          labels = c(expression("CO"["2"]), expression("CH"["4"]), 
+                                     expression("N"["2"]*"O")))
+
+ggsave("Fluxes_WSP.tiff", WSP_fluxes %>% ggplot(aes(x = Pond, y = Fluxes, fill = Pond)) +
+           geom_boxplot() +
+           stat_summary(fun.y=mean, geom="point", shape=20, size=5, color="red", fill="red") +
+           theme_bw()+
+           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
+           scale_fill_brewer(palette = "Paired", name = "Ponds",
+                             labels = c("Aerated Ponds", "Facultative Ponds", "Maturation Ponds"))+
+           theme(text=element_text(size=14),
+                 strip.text.x = element_text(size=14),
+                 axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank(),
+                 axis.title.x = element_blank(),
+                 legend.position="right",
+                 legend.title = element_text(size = 14),
+                 legend.text = element_text(size = 12),
+                 legend.spacing.x = unit(0.5, 'cm')), 
+       units = 'cm', height = 15, width = 30, dpi = 300
+)
+
+#** WSP with separation between lines ####
+
+WSP_fluxes_sep <- WSP %>% select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
+WSP_fluxes_sep$Pond <- paste(WSP$Pond, WSP$Line, sep = " ")
+WSP_fluxes_sep <- WSP_fluxes_sep %>%  pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
+WSP_fluxes_sep$Pond <- as.factor(WSP_fluxes_sep$Pond)
+WSP_fluxes_sep$Pond <- factor(WSP_fluxes_sep$Pond,
+                                 labels = c("Anaerobic Pond 1", "Anaerobic Pond 2", "Facultative Pond 1", 
+                                            "Facultative Pond 2", "Maturation Pond 1", "Maturation Pond 2"))
+WSP_fluxes_sep$GHGs <- as.factor(WSP_fluxes_sep$GHGs)
+WSP_fluxes_sep$GHGs <- relevel(WSP_fluxes_sep$GHGs,"Flux_CO2 (mg.m-2.d-1)")
+WSP_fluxes_sep$GHGs <- factor(WSP_fluxes_sep$GHGs,
+                          labels = c(expression("CO"["2"]), expression("CH"["4"]), 
+                                     expression("N"["2"]*"O")))
+
+ggsave("Fluxes_WSP_separation.tiff", WSP_fluxes_sep %>% ggplot(aes(x = Pond, y = Fluxes, fill = Pond)) +
+           geom_boxplot() +
+           stat_summary(fun.y=mean, geom="point", shape=20, size=5, color="red", fill="red") +
+           theme_bw()+
+           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
+           scale_fill_brewer(palette = "Paired", name = "Ponds")+
+           theme(text=element_text(size=14),
+                 strip.text.x = element_text(size=14),
+                 axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank(),
+                 axis.title.x = element_blank(),
+                 legend.position="right",
+                 legend.title = element_text(size = 14),
+                 legend.text = element_text(size = 12),
+                 legend.spacing.x = unit(0.5, 'cm')), 
+       units = 'cm', height = 15, width = 30, dpi = 300
+)
+
+#** WSP_24h ####
+
+WSP_24h_fluxes <- WSP_24h %>% select(Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
+    pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
+WSP_24h_fluxes$GHGs <- as.factor(WSP_24h_fluxes$GHGs)
+WSP_24h_fluxes$GHGs <- relevel(WSP_24h_fluxes$GHGs,"Flux_CO2 (mg.m-2.d-1)")
+WSP_24h_fluxes$GHGs <- factor(WSP_24h_fluxes$GHGs,
+                          labels = c(expression("CO"["2"]), expression("CH"["4"]), 
+                                     expression("N"["2"]*"O")))
+
+ggsave("Fluxes_WSP_24h.tiff", WSP_24h_fluxes %>% ggplot(aes(x = Pond, y = Fluxes, fill = Pond)) +
+           geom_boxplot() +
+           stat_summary(fun=mean, geom="point", shape=20, size=5, color="red", fill="red") +
+           theme_bw()+
+           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
+           scale_fill_brewer(palette = "Paired", name = "Ponds",
+                             labels = c("Facultative Pond 2", "Maturation Pond 2"))+
+           theme(text=element_text(size=14),
+                 strip.text.x = element_text(size=14),
+                 axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank(),
+                 axis.title.x = element_blank(),
+                 legend.position="right",
+                 legend.title = element_text(size = 14),
+                 legend.text = element_text(size = 12),
+                 legend.spacing.x = unit(0.5, 'cm')), 
+       units = 'cm', height = 15, width = 30, dpi = 300
+)
+
+#** WSP_both ####
+
+WSP_both_sep <- WSP_both %>% select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
+WSP_both_sep$Pond <- paste(WSP_both$Pond, WSP_both$Line, sep = " ")
+WSP_both_sep <- WSP_both_sep %>%  pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
+WSP_both_sep$Pond <- as.factor(WSP_both_sep$Pond)
+WSP_both_sep$Pond <- factor(WSP_both_sep$Pond,
+                              labels = c("Anaerobic Pond 1", "Anaerobic Pond 2", "Facultative Pond 1", 
+                                         "Facultative Pond 2", "Maturation Pond 1", "Maturation Pond 2"))
+WSP_both_sep$GHGs <- as.factor(WSP_both_sep$GHGs)
+WSP_both_sep$GHGs <- relevel(WSP_both_sep$GHGs,"Flux_CO2 (mg.m-2.d-1)")
+WSP_both_sep$GHGs <- factor(WSP_both_sep$GHGs,
+                              labels = c(expression("CO"["2"]), expression("CH"["4"]), 
+                                         expression("N"["2"]*"O")))
+
+ggsave("Fluxes_WSP_both_separation.tiff", WSP_both_sep %>% ggplot(aes(x = Pond, y = Fluxes, fill = Pond)) +
+           geom_boxplot() +
+           stat_summary(fun=mean, geom="point", shape=20, size=5, color="black", fill="black") +
+           theme_bw()+
+           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
+           scale_fill_brewer(palette = "Paired", name = "Ponds")+
+           theme(text=element_text(size=14),
+                 strip.text.x = element_text(size=14),
+                 axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank(),
+                 axis.title.x = element_blank(),
+                 legend.position="right",
+                 legend.title = element_text(size = 14),
+                 legend.text = element_text(size = 12),
+                 legend.spacing.x = unit(0.5, 'cm')), 
+       units = 'cm', height = 15, width = 30, dpi = 300
+)
+
+#### Old_line_chart_WSP_24h ####
+
+
+
+WSP_24h_line <- WSP_24h %>% select(Time, Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
+    pivot_longer(cols=c(-Pond, -Time),  names_to = "GHGs", values_to = "Fluxes")
+WSP_24h_line$Pond <- as.factor(WSP_24h_line$Pond)
+WSP_24h_line$Pond <- factor(WSP_24h_line$Pond,
+                            labels = c("Facultative Pond", "Maturation Pond"))
+WSP_24h_line$GHGs <- as.factor(WSP_24h_line$GHGs)
+WSP_24h_line$GHGs <- relevel(WSP_24h_line$GHGs,"Flux_CO2 (mg.m-2.d-1)")
+WSP_24h_line$GHGs <- factor(WSP_24h_line$GHGs,
+                              labels = c(expression("CO"["2"]), expression("CH"["4"]), 
+                                         expression("N"["2"]*"O")))
+
+ggsave("Line_24h_CO2_fluxes.tiff", WSP_24h_line %>% 
+           ggplot(aes(x = Time, y = Fluxes, group = GHGs)) +
+           geom_line(aes(color = GHGs)) + 
+           geom_point(aes(color = GHGs)) +
+           theme_bw()+
+           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           facet_wrap(Pond ~ GHGs, scales = "free", labeller = labeller(GHGs = label_parsed))+
+           scale_color_brewer(palette = "Dark2",)+
+           theme(text=element_text(size=14),
+                 strip.text.x = element_text(size=14),
+                 axis.text.x = element_text(size=12),
+                 axis.title.x = element_blank(),
+                 legend.position = "none")
+       , units = 'cm', height = 20, width = 50,dpi = 300)
+
+#### Correct_summarise flux in each pond ####
+
+WSP_total <- WSP[,c(28:30)] 
+WSP_total$Pond <- paste(WSP$Pond, WSP$Line, sep = " ")
+WSP_total <- WSP_total %>% group_by(Pond) %>% summarise_each(funs(mean, std.error)) # mg.m-2.d-1
+WSP_total$Area <- c(30000, 30000, 130000, 130000, 74000, 56000) # m2
+colnames(WSP_total)[2:7] <- c("Mean_CO2", "Mean_CH4", "Mean_N2O", "SEM_CO2", "SEM_CH4", "SEM_N2O")
+WSP_total <- WSP_total %>% mutate_at(vars(`Mean_CO2`, `Mean_CH4`, `Mean_N2O`), funs("area" = .*365*Area/1000000)) # kg.year-1
+WSP_total <- WSP_total %>% mutate_at(vars("SEM_CO2", "SEM_CH4", "SEM_N2O"), funs("area" = .*365*Area/1000000)) # kg.year-1
+WSP_total <- WSP_total %>% mutate_at(vars("Mean_CO2_area", "Mean_CH4_area", "Mean_N2O_area"), funs("percent" = .*100/ sum(.))) # percentage of area
+
+# Separate lines 1 and 2 
+
+WSP_total_stacked <- WSP_total[,c(1,15:16)] # negative N2O flux --> cannot calculate its total emissions
+WSP_total_stacked <- WSP_total_stacked %>% pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Total emissions")
+WSP_total_stacked$Pond <- as.factor(WSP_total_stacked$Pond)
+WSP_total_stacked$Pond <- factor(WSP_total_stacked$Pond,
+                                 labels = c("Anaerobic Pond 1", "Anaerobic Pond 2", "Facultative Pond 1", 
+                                            "Facultative Pond 2", "Maturation Pond 1", "Maturation Pond 2"))
+WSP_total_stacked$GHGs <- as.factor(WSP_total_stacked$GHGs)
+WSP_total_stacked$GHGs <- relevel(WSP_total_stacked$GHGs, "Mean_CO2_area_percent")
+WSP_total_stacked$GHGs <- factor(WSP_total_stacked$GHGs, 
+                                 labels = c(expression("CO"["2"]), expression("CH"["4"])))
+
+ggsave("Per_pond_total_emissions.tiff", WSP_total_stacked %>% 
+         ggplot() +
+         geom_bar(aes(y=`Total emissions`, x=GHGs,fill = Pond), stat = 'identity')+
+         theme_bw() +
+         # xlab("Year") +
+         ylab("Fraction of the total emission per year (%)") +
+         # facet_grid(.~Bank) +
+         scale_fill_brewer(palette = "Paired") +
+         scale_x_discrete(labels =c(bquote("CO"[2]), bquote("CH"[4])))+
+         theme(text=element_text(size=14),
+               strip.text.x = element_text(size=14),
+               axis.text.x = element_text(size = 14),
+               axis.ticks.x = element_blank(),
+               axis.title.x = element_blank(),
+               legend.position="right",
+               legend.title = element_blank(),
+               legend.text = element_text(size = 12),
+               legend.spacing.x = unit(0.5, 'cm')),
+     units = 'cm', height = 20, width = 20, dpi = 300)
 
-for (i in 1:length(plot_pond)){
-    tiff(filename = paste("Boxplot_pond_",colnames(WSP)[7:27][i],".tiff", sep =""),units = 'px',height = 1800,width = 1800,res = 300,pointsize = 12)
-    print(plot_pond[[i]])
-    dev.off()
-}
-
-# Put graphs with similar variables together
-
-ggsave("Boxplot_pond_1.tiff",marrangeGrob(plot_pond[1:4],nrow = 2, ncol= 2, top = ''),
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-ggsave("Boxplot_pond_2.tiff",marrangeGrob(plot_pond[5:8],nrow = 2, ncol= 2, top = ''),
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-ggsave("Boxplot_pond_3.tiff",marrangeGrob(plot_pond[9:11],nrow = 1, ncol= 3, top = ''),
-       units = 'cm', height = 15, width = 30, dpi = 300)
-
-ggsave("Boxplot_pond_4.tiff",marrangeGrob(plot_pond[12:17],nrow = 2, ncol= 3, top = ''),
-       units = 'cm', height = 15, width = 30, dpi = 300)
-
-ggsave("Boxplot_pond_5.tiff",marrangeGrob(plot_pond[18:21],nrow = 2, ncol= 2, top = ''),
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-
-#### Boxplot of all countinuous variables regarding ponds and position #### 
-
-# This  is for make a list of graph
-
-plot_WSP2 <- function (data, column, column2) {
-    ggplot(data) +
-        geom_boxplot(aes_string(x = column2 , y = column)) +
-        xlab(column2) +
-        ylab(column) +
-        facet_wrap(.~Position)
-}
-
-plot_pond_position <- lapply(colnames(WSP)[7:27], plot_WSP2, data = WSP, column2 = "Pond")
-
-# print the plot
-
-lapply(plot_pond_position, print)
-
-# save the plot into folder
-
-# for (i in 1:length(plot_pond_position)){
-#     tiff(filename = paste("Boxplot_pond_position_",colnames(WSP)[7:27][i],".tiff", sep =""),units = 'px',height = 1800,width = 1800,res = 300,pointsize = 12)
-#     print(plot_pond_position[[i]])
-#     dev.off()
-# }
-
-# Put graphs with similar variables together
-
-ggsave("Boxplot_pond_position1.tiff",marrangeGrob(plot_pond_position[1:4],nrow = 2, ncol= 2, top = '')
-       , units = 'cm', height = 20, width = 20,dpi = 300)
-
-ggsave("Boxplot_pond_position2.tiff",marrangeGrob(plot_pond_position[5:8],nrow = 2, ncol= 2, top = '')
-       , units = 'cm', height = 20, width = 20,dpi = 300)
-
-ggsave("Boxplot_pond_position3.tiff",marrangeGrob(plot_pond_position[9:11],nrow = 1, ncol= 3, top = '')
-       , units = 'cm', height = 15, width = 30,dpi = 300)
-
-ggsave("Boxplot_pond_position4.tiff",marrangeGrob(plot_pond_position[12:17],nrow = 2, ncol= 3, top = '')
-       , units = 'cm', height = 15, width = 30,dpi = 300)
-
-ggsave("Boxplot_pond_position5.tiff",marrangeGrob(plot_pond_position[18:21],nrow = 2, ncol= 2, top = '')
-       , units = 'cm', height = 20, width = 20,dpi = 300)
-
-
-#### Boxplot of DG1 and DG2 regarding ponds ####
-
-# transform to dissolved gas dataframe
-
-WSP2 <- cbind(WSP[,4:6],WSP[,34:39])
-WSP2 <- WSP2 %>% gather(key = 'Dissolved_gases', value = 'Concentration', - Pond, - Line, - Position)
-
-# Plot them for the whole system 
-
-ggsave("Boxplot_CO2.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CO2_1|Dis_CO2_2")) %>% 
-    ggplot() +
-    geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-    xlab("Dissolved_gas") +
-    ylab("CO2"))
-
-ggsave("Boxplot_NO2.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_N2O_1|Dis_N2O_2")) %>% 
-    ggplot() +
-    geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-    xlab("Dissolved_gas") +
-    ylab("NO2"))
-
-ggsave("Boxplot_CH4.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CH4_1|Dis_CH4_2")) %>% 
-    ggplot() +
-    geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-    xlab("Dissolved_gas") +
-    ylab("CH4"))
-
-# Plot them for different ponds
-
-ggsave("Boxplot_pond_CO2.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CO2_1|Dis_CO2_2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CO2") +
-           facet_wrap(.~Pond))
-
-ggsave("Boxplot_pond_NO2.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_N2O_1|Dis_N2O_2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("NO2") +
-           facet_wrap(.~Pond))
-
-ggsave("Boxplot_pond_CH4.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CH4_1|Dis_CH4_2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CH4") +
-           facet_wrap(.~Pond))
-
-
-# Plot them for different ponds and lines
-
-ggsave("Boxplot_pond_line_CO2.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CO2_1|Dis_CO2_2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CO2") +
-           facet_grid(Line~Pond))
-ggsave("Boxplot_pond_line_NO2.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_N2O_1|Dis_N2O_2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("NO2") +
-           facet_grid(Line~Pond, scales = "free"))
-ggsave("Boxplot_pond_line_CH4.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CH4_1|Dis_CH4_2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CH4") +
-           facet_grid(Line~Pond))
-
-
-
-#### Boxplot of DG_cor regarding ponds ####
-
-# transform to dissolved gas dataframe
-
-WSP2 <- cbind(WSP[,4:6],WSP[,44:46])
-WSP2 <- WSP2 %>% gather(key = 'Dissolved_gases', value = 'Concentration', - Pond, - Line, - Position)
-
-# Plot them for the whole system 
-
-ggsave("Boxplot_CO2_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CO2_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CO2"))
-
-ggsave("Boxplot_NO2_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_N2O_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("NO2"))
-
-ggsave("Boxplot_CH4_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CH4_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CH4"))
-
-# Plot them for different ponds
-
-ggsave("Boxplot_pond_CO2_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CO2_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CO2") +
-           facet_wrap(.~Pond))
-
-ggsave("Boxplot_pond_NO2_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_N2O_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("NO2") +
-           facet_wrap(.~Pond))
-
-ggsave("Boxplot_pond_CH4_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CH4_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CH4") +
-           facet_wrap(.~Pond))
-
-
-# Plot them for different ponds and lines
-
-ggsave("Boxplot_pond_line_CO2_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CO2_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CO2") +
-           facet_grid(Line~Pond))
-ggsave("Boxplot_pond_line_NO2_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_N2O_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("NO2") +
-           facet_grid(Line~Pond, scales = "free"))
-ggsave("Boxplot_pond_line_CH4_cor.tiff", WSP2 %>% filter(str_detect(Dissolved_gases, "Dis_CH4_cor")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Dissolved_gases), y = Concentration)) +
-           xlab("Dissolved_gas") +
-           ylab("CH4") +
-           facet_grid(Line~Pond))
-
-
-
-#### Boxplot of fluxes (mmol.m-2.d-1) regarding ponds ####
-
-# transform to fluxes dataframe
-
-WSP3 <- cbind(WSP[,4:6],WSP[,31:33])
-colnames(WSP3)[4:6] <- c("CO2","N2O","CH4")
-WSP3 <- WSP3 %>% gather(key = 'Fluxes', value = 'Concentration', - Pond, - Line, - Position)
-
-WSP4 <- cbind(WSP[,4:6],WSP[,34:36])
-colnames(WSP4)[4:6] <- c("CO2","N2O","CH4")
-WSP4 <- WSP4 %>% gather(key = 'Fluxes', value = 'Concentration', - Pond, - Line, - Position)
-
-
-# Plot them for the whole system 
-
-ggsave("Boxplot_CO2_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "CO2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("CO2"))
-
-ggsave("Boxplot_NO2_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "N2O")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("NO2"))
-
-ggsave("Boxplot_CH4_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "CH4")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("CH4"))
-
-# Plot them for different ponds
-
-ggsave("Boxplot_pond_CO2_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "CO2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("CO2") +
-           facet_wrap(.~Pond, scales = "free"))
-
-ggsave("Boxplot_pond_NO2_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "N2O")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("NO2") +
-           facet_wrap(.~Pond, scales = "free"))
-
-ggsave("Boxplot_pond_CH4_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "CH4")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("CH4") +
-           facet_wrap(.~Pond, scales = "free"))
-
-
-# Plot them for different ponds and lines
-
-ggsave("Boxplot_pond_line_CO2_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "CO2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("CO2") +
-           facet_grid(Line~Pond, scales = "free"))
-ggsave("Boxplot_pond_line_NO2_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "N2O")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("NO2") +
-           facet_grid(Line~Pond, scales = "free"))
-ggsave("Boxplot_pond_line_CH4_flux.tiff", WSP3 %>% filter(str_detect(Fluxes, "CH4")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (mmol.m-2.d-1)") +
-           ylab("CH4") +
-           facet_grid(Line~Pond, scales = "free"))
-
-
-
-#### Boxplot of fluxes (g.m-2.d-1) regarding ponds ####
-
-# transform to fluxes dataframe
-
-
-WSP4 <- cbind(WSP[,4:6],WSP[,34:36])
-colnames(WSP4)[4:6] <- c("CO2","N2O","CH4")
-WSP4 <- WSP4 %>% gather(key = 'Fluxes', value = 'Concentration', - Pond, - Line, - Position)
-
-
-# Plot them for the whole system 
-
-ggsave("Boxplot_CO2_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "CO2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("CO2"))
-
-ggsave("Boxplot_NO2_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "N2O")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("NO2"))
-
-ggsave("Boxplot_CH4_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "CH4")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("CH4"))
-
-# Plot them for different ponds
-
-ggsave("Boxplot_pond_CO2_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "CO2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("CO2") +
-           facet_wrap(.~Pond, scales = "free"))
-
-ggsave("Boxplot_pond_NO2_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "N2O")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("NO2") +
-           facet_wrap(.~Pond, scales = "free"))
-
-ggsave("Boxplot_pond_CH4_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "CH4")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("CH4") +
-           facet_wrap(.~Pond, scales = "free"))
-
-
-# Plot them for different ponds and lines
-
-ggsave("Boxplot_pond_line_CO2_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "CO2")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("CO2") +
-           facet_grid(Line~Pond, scales = "free"))
-ggsave("Boxplot_pond_line_NO2_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "N2O")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("NO2") +
-           facet_grid(Line~Pond, scales = "free"))
-ggsave("Boxplot_pond_line_CH4_flux_2.tiff", WSP4 %>% filter(str_detect(Fluxes, "CH4")) %>% 
-           ggplot() +
-           geom_boxplot(aes(x = as.factor(Fluxes), y = Concentration)) +
-           xlab("Flux (g.m-2.d-1)") +
-           ylab("CH4") +
-           facet_grid(Line~Pond, scales = "free"))
 
 #### Correlation coefficients #### 
+variable_river <- cbind(river[,6:13], river[,22:33]) %>% select(-Rain)
 
-ggpairs(WSP[7:27],
-        lower = list(continuous = wrap("smooth", color = "deepskyblue")),
-        upper = list(continuous = wrap("cor", size = 3, color = "tomato"))
-) + theme(panel.grid.minor = element_blank(), 
-          panel.grid.major = element_blank())
+corr_river <- cor(variable_river, use = 'pairwise')
+p.mat <- cor.mtest(variable_river)$p
+colnames(p.mat) <- colnames(corr_river)
+row.names(p.mat) <- colnames(corr_river)
 
-#### Comparisons test (t-test, ANOVA, etc) #### 
-# lack of data --> non parameteric analysis
+# GGally Not really nice
+ggsave("Corr_coeff.tiff", ggpairs(variable_river,
+                                  lower = list(continuous = wrap("smooth", color = "deepskyblue")),
+                                  upper = list(continuous = wrap("cor", size = 3, color = "tomato"))
+) + theme(panel.grid.minor = element_blank(),
+          panel.grid.major = element_blank()),
+units = 'cm', height = 50, width = 50, dpi = 300)
+
+
+# corrplot nicer but cannot handle the categorical variables
+
+tiff("corr_coeff_2.tiff",units = 'cm',height = 50,width = 50,res = 300, pointsize = 12)
+corrplot(corr_river, p.mat = p.mat, method = "circle", type = "upper",
+         sig.level = 0.05, insig = "blank", order = "alphabet")
+dev.off()
+
+# Using mosaic plot to represent the relationship among two or more categorical variables 
+# in this case, only for river and hydromorphological data
+
+ggsave("Mosaic_river_LB.tiff", ggplot(river)+
+           geom_mosaic(aes(x= product(River), fill = "Lelf Bank"))+
+           labs(x ="", y = ""),
+       units = 'cm', height = 30, width = 40, dpi = 300)
+ggsave("Mosaic_river_RB.tiff", ggplot(river)+
+           geom_mosaic(aes(x= product(River), fill = "Right Bank"))+
+           labs(x ="", y = ""),
+       units = 'cm', height = 30, width = 40, dpi = 300)
+ggsave("Mosaic_river_FV.tiff",ggplot(river)+
+           geom_mosaic(aes(x= product(River), fill = "Flow variability"))+
+           labs(x ="", y = ""),
+       units = 'cm', height = 30, width = 40, dpi = 300)
+ggsave("Mosaic_river_shading.tiff",ggplot(river)+
+           geom_mosaic(aes(x= product(River), fill = Shading))+
+           labs(x ="", y = ""),
+       units = 'cm', height = 30, width = 40, dpi = 300)
+ggsave("Mosaic_river_erosion.tiff",ggplot(river)+
+           geom_mosaic(aes(x= product(River), fill = Erosion))+
+           labs(x ="", y = ""),
+       units = 'cm', height = 30, width = 40, dpi = 300)
+ggsave("Mosaic_river_pool.tiff",ggplot(river)+
+           geom_mosaic(aes(x= product(River), fill = "Pool Class"))+
+           labs(x ="", y = ""),
+       units = 'cm', height = 30, width = 40, dpi = 300)
+
+
+#### Spatio-temporal variability ####
+#*** Friedmann test ####
+
+
+
+river_fried <- river %>% select(c(2, 5, 36:38))
+river_fried_1 <- aggregate(data = river_fried, .~Date + River, mean)
+
+
+
+#### Wrong_Permutation testing  ####
+# lack of data --> non parameteric analysis (not sure about the distribution of the data)
+# --> using Permanova for multivariate comparison for testing the simultaneous response of one or more variables to one or more
+# factors in an ANOVA experimental design on the basis of any distance measure, using permutation methods
+# to accommodate random effects, hierarchical models, mixed models, quantitative covariates,
+# repeated measures, unbalanced and/or asymmetrical designs, and, most recently, heterogeneous dispersions among groups.
+# or Fried.mann for univariate comparison repeated measures with block effects to avoid dependent samples.
+# Test the multivariate homogeneity of groups dispersions
+
+mod <- betadisper(daisy(GHGes, metric = "euclidean", stand = TRUE), group = river$River) # using betadisper is a multivariate analogue of Levene's test for homogeneity of variances.
+permutest(mod)
+anova(mod)
+plot(mod, hull=FALSE, ellipse=TRUE)
+boxplot(mod)
+
+# p value > 0.05 --> homogeneity of multivariate dispersions.
+# PERMANOVA (likeANOVA) is very robust to heterogeneity for balanced designs but not unbalanced designs.
+# Fortunately, in this case, it is homoegenous
+
+# using Permanova anyway
+
+pairwise.adonis <- function(x,factors, sim.function = 'vegdist', sim.method = 'euclidean', p.adjust.m ='bonferroni'){
+    library(vegan)
+
+    co = combn(unique(as.character(factors)),2)
+    pairs = c()
+    F.Model =c()
+    R2 = c()
+    p.value = c()
+
+    for(elem in 1:ncol(co)){
+        if(sim.function == 'daisy'){
+            library(cluster)
+            x1 = daisy(x[factors %in% c(co[1,elem],co[2,elem]),],metric=sim.method)
+        } else {
+            x1 = vegdist(x[factors %in% c(co[1,elem],co[2,elem]),],method=sim.method)
+        }
+
+        ad = adonis(x1 ~ factors[factors %in% c(co[1,elem],co[2,elem])] );
+        pairs = c(pairs,paste(co[1,elem],'vs',co[2,elem]));
+        F.Model =c(F.Model,ad$aov.tab[1,4]);
+        R2 = c(R2,ad$aov.tab[1,5]);
+        p.value = c(p.value,ad$aov.tab[1,6])
+    }
+
+    p.adjusted = p.adjust(p.value,method=p.adjust.m)
+    sig = c(rep('',length(p.adjusted)))
+    sig[p.adjusted <= 0.05] <-'.'
+    sig[p.adjusted <= 0.01] <-'*'
+    sig[p.adjusted <= 0.001] <-'**'
+    sig[p.adjusted <= 0.0001] <-'***'
+
+    pairw.res = data.frame(pairs,F.Model,R2,p.value,p.adjusted,sig)
+    print("Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1")
+    return(pairw.res)
+
+}
+
+GHGes <- river[,46:48]
+GHGes_dis_matrix <- daisy(GHGes, metric = "euclidean", stand = TRUE)
+
+set.seed(2805)
+
+permanova_river_phys <- adonis(GHGes_dis_matrix ~ T_w + DO + pH + EC+ Sal + Turb + Chlr,
+                               data = river, permutations = 999,
+                               method = "euclidean", strata = river$River)
+summary(permanova_river_phys)
+permanova_river_phys
+permanova_river_phys$aov.tab[,6]
+
+pairwise.adonis(river[,6:13], river$River) #  physical
+
+
+# more about the
+
+
