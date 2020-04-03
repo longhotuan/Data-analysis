@@ -29,6 +29,13 @@ library(mice)
 library(VIM)
 library(ggmosaic)
 library(esquisse)
+library(ggcorrplot)
+library(ggbiplot)
+library(viridis)
+library(wesanderson)
+library(rvg)
+library(officer)
+
 
 # data analysis - machine learning - statistics
 
@@ -53,6 +60,15 @@ library(xgboost)
 library(checkmate)
 library(ranger)
 library(rstatix)
+library(robustHD)
+library(MASS)
+library(cluster)
+library(ClusterR)
+library(clusterSim)
+library(clue)
+library(parallel)
+library(parallelMap)
+
 
 
 #### import data #### 
@@ -254,7 +270,7 @@ WSP_both$Sample <- as.factor(WSP_both$Sample)
 
 
 #### Correct_Boxplot_Fluxes per ponds ####
-#** WSP no separation between lines ####
+#** WSP no separation ####
 
 WSP_fluxes <- WSP %>% select(Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
     pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
@@ -284,7 +300,7 @@ ggsave("Fluxes_WSP.tiff", WSP_fluxes %>% ggplot(aes(x = Pond, y = Fluxes, fill =
        units = 'cm', height = 15, width = 30, dpi = 300
 )
 
-#** WSP with separation between lines ####
+#** WSP with separation ####
 
 WSP_fluxes_sep <- WSP %>% select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
 WSP_fluxes_sep$Pond <- paste(WSP$Pond, WSP$Line, sep = " ")
@@ -385,7 +401,6 @@ ggsave("Fluxes_WSP_both_separation.tiff", WSP_both_sep %>% ggplot(aes(x = Pond, 
 #### Old_line_chart_WSP_24h ####
 
 
-
 WSP_24h_line <- WSP_24h %>% select(Time, Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
     pivot_longer(cols=c(-Pond, -Time),  names_to = "GHGs", values_to = "Fluxes")
 WSP_24h_line$Pond <- as.factor(WSP_24h_line$Pond)
@@ -413,8 +428,9 @@ ggsave("Line_24h_CO2_fluxes.tiff", WSP_24h_line %>%
        , units = 'cm', height = 20, width = 50,dpi = 300)
 
 #### Correct_summarise flux in each pond ####
+#** WSP with separation ####
 
-WSP_total <- WSP[,c(28:30)] 
+WSP_total <- WSP %>% select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
 WSP_total$Pond <- paste(WSP$Pond, WSP$Line, sep = " ")
 WSP_total <- WSP_total %>% group_by(Pond) %>% summarise_each(funs(mean, std.error)) # mg.m-2.d-1
 WSP_total$Area <- c(30000, 30000, 130000, 130000, 74000, 56000) # m2
@@ -422,8 +438,6 @@ colnames(WSP_total)[2:7] <- c("Mean_CO2", "Mean_CH4", "Mean_N2O", "SEM_CO2", "SE
 WSP_total <- WSP_total %>% mutate_at(vars(`Mean_CO2`, `Mean_CH4`, `Mean_N2O`), funs("area" = .*365*Area/1000000)) # kg.year-1
 WSP_total <- WSP_total %>% mutate_at(vars("SEM_CO2", "SEM_CH4", "SEM_N2O"), funs("area" = .*365*Area/1000000)) # kg.year-1
 WSP_total <- WSP_total %>% mutate_at(vars("Mean_CO2_area", "Mean_CH4_area", "Mean_N2O_area"), funs("percent" = .*100/ sum(.))) # percentage of area
-
-# Separate lines 1 and 2 
 
 WSP_total_stacked <- WSP_total[,c(1,15:16)] # negative N2O flux --> cannot calculate its total emissions
 WSP_total_stacked <- WSP_total_stacked %>% pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Total emissions")
@@ -455,21 +469,65 @@ ggsave("Per_pond_total_emissions.tiff", WSP_total_stacked %>%
                legend.text = element_text(size = 12),
                legend.spacing.x = unit(0.5, 'cm')),
      units = 'cm', height = 20, width = 20, dpi = 300)
+#** WSP_both with separation ####
+
+WSP_both_total <- WSP_both %>% select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
+WSP_both_total$Pond <- paste(WSP_both$Pond, WSP_both$Line, sep = " ")
+WSP_both_total <- WSP_both_total %>% group_by(Pond) %>% summarise_each(funs(mean, std.error)) # mg.m-2.d-1
+WSP_both_total$Area <- c(30000, 30000, 130000, 130000, 74000, 56000) # m2
+colnames(WSP_both_total)[2:7] <- c("Mean_CO2", "Mean_CH4", "Mean_N2O", "SEM_CO2", "SEM_CH4", "SEM_N2O")
+WSP_both_total <- WSP_both_total %>% mutate_at(vars(`Mean_CO2`, `Mean_CH4`, `Mean_N2O`), funs("area" = .*365*Area/1000000)) # kg.year-1
+WSP_both_total <- WSP_both_total %>% mutate_at(vars("SEM_CO2", "SEM_CH4", "SEM_N2O"), funs("area" = .*365*Area/1000000)) # kg.year-1
+WSP_both_total <- WSP_both_total %>% mutate_at(vars("Mean_CO2_area", "Mean_CH4_area", "Mean_N2O_area"), funs("percent" = .*100/ sum(.))) # percentage of area
+
+WSP_both_total_stacked <- WSP_both_total[,c(1,15:16)] # negative N2O flux --> cannot calculate its total emissions
+WSP_both_total_stacked <- WSP_both_total_stacked %>% pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Total emissions")
+WSP_both_total_stacked$Pond <- as.factor(WSP_both_total_stacked$Pond)
+WSP_both_total_stacked$Pond <- factor(WSP_both_total_stacked$Pond,
+                                 labels = c("Anaerobic Pond 1", "Anaerobic Pond 2", "Facultative Pond 1", 
+                                            "Facultative Pond 2", "Maturation Pond 1", "Maturation Pond 2"))
+WSP_both_total_stacked$GHGs <- as.factor(WSP_both_total_stacked$GHGs)
+WSP_both_total_stacked$GHGs <- relevel(WSP_both_total_stacked$GHGs, "Mean_CO2_area_percent")
+WSP_both_total_stacked$GHGs <- factor(WSP_both_total_stacked$GHGs, 
+                                 labels = c(expression("CO"["2"]), expression("CH"["4"])))
+
+ggsave("Per_pond_total_emissions_both.tiff", WSP_both_total_stacked %>% 
+           ggplot() +
+           geom_bar(aes(y=`Total emissions`, x=GHGs,fill = Pond), stat = 'identity')+
+           theme_bw() +
+           # xlab("Year") +
+           ylab("Fraction of the total emission per year (%)") +
+           # facet_grid(.~Bank) +
+           scale_fill_brewer(palette = "Paired") +
+           scale_x_discrete(labels =c(bquote("CO"[2]), bquote("CH"[4])))+
+           theme(text=element_text(size=14),
+                 strip.text.x = element_text(size=14),
+                 axis.text.x = element_text(size = 14),
+                 axis.ticks.x = element_blank(),
+                 axis.title.x = element_blank(),
+                 legend.position="right",
+                 legend.title = element_blank(),
+                 legend.text = element_text(size = 12),
+                 legend.spacing.x = unit(0.5, 'cm')),
+       units = 'cm', height = 20, width = 20, dpi = 300)
 
 
 #### Correlation coefficients #### 
-variable_river <- cbind(river[,6:13], river[,22:33]) %>% select(-Rain)
 
-corr_river <- cor(variable_river, use = 'pairwise')
-p.mat <- cor.mtest(variable_river)$p
-colnames(p.mat) <- colnames(corr_river)
-row.names(p.mat) <- colnames(corr_river)
+#** WSP ####
+
+variable_WSP <- WSP[,c(7:30, 35:37)] %>% select(-`Rainfall (mm)`)
+
+corr_WSP <- cor(variable_WSP, use = 'pairwise')
+p.mat <- cor.mtest(variable_WSP)$p
+colnames(p.mat) <- colnames(corr_WSP)
+row.names(p.mat) <- colnames(corr_WSP)
 
 # GGally Not really nice
-ggsave("Corr_coeff.tiff", ggpairs(variable_river,
+ggsave("Corr_coeff.jpeg", ggpairs(variable_WSP,
                                   lower = list(continuous = wrap("smooth", color = "deepskyblue")),
-                                  upper = list(continuous = wrap("cor", size = 3, color = "tomato"))
-) + theme(panel.grid.minor = element_blank(),
+                                  upper = list(continuous = wrap("cor", size = 3, color = "tomato"))) +
+           theme(panel.grid.minor = element_blank(),
           panel.grid.major = element_blank()),
 units = 'cm', height = 50, width = 50, dpi = 300)
 
@@ -477,122 +535,734 @@ units = 'cm', height = 50, width = 50, dpi = 300)
 # corrplot nicer but cannot handle the categorical variables
 
 tiff("corr_coeff_2.tiff",units = 'cm',height = 50,width = 50,res = 300, pointsize = 12)
-corrplot(corr_river, p.mat = p.mat, method = "circle", type = "upper",
+corrplot(corr_WSP, p.mat = p.mat, method = "circle", type = "upper",
          sig.level = 0.05, insig = "blank", order = "alphabet")
 dev.off()
 
-# Using mosaic plot to represent the relationship among two or more categorical variables 
-# in this case, only for river and hydromorphological data
+# use ggcorrplot 
 
-ggsave("Mosaic_river_LB.tiff", ggplot(river)+
-           geom_mosaic(aes(x= product(River), fill = "Lelf Bank"))+
-           labs(x ="", y = ""),
-       units = 'cm', height = 30, width = 40, dpi = 300)
-ggsave("Mosaic_river_RB.tiff", ggplot(river)+
-           geom_mosaic(aes(x= product(River), fill = "Right Bank"))+
-           labs(x ="", y = ""),
-       units = 'cm', height = 30, width = 40, dpi = 300)
-ggsave("Mosaic_river_FV.tiff",ggplot(river)+
-           geom_mosaic(aes(x= product(River), fill = "Flow variability"))+
-           labs(x ="", y = ""),
-       units = 'cm', height = 30, width = 40, dpi = 300)
-ggsave("Mosaic_river_shading.tiff",ggplot(river)+
-           geom_mosaic(aes(x= product(River), fill = Shading))+
-           labs(x ="", y = ""),
-       units = 'cm', height = 30, width = 40, dpi = 300)
-ggsave("Mosaic_river_erosion.tiff",ggplot(river)+
-           geom_mosaic(aes(x= product(River), fill = Erosion))+
-           labs(x ="", y = ""),
-       units = 'cm', height = 30, width = 40, dpi = 300)
-ggsave("Mosaic_river_pool.tiff",ggplot(river)+
-           geom_mosaic(aes(x= product(River), fill = "Pool Class"))+
-           labs(x ="", y = ""),
-       units = 'cm', height = 30, width = 40, dpi = 300)
+ggsave("Corr_coeff_3.jpeg",ggcorrplot(corr_WSP,
+                                      hc.order = TRUE,
+                                      type = "lower",
+                                      lab = TRUE),
+       units = 'cm', height = 20, width = 20, dpi = 300)
+ggsave("Corr_coeff_4.jpeg",ggcorrplot(corr_WSP,
+                                      method="circle",
+                                      hc.order = TRUE,
+                                      type = "lower",
+                                      lab = FALSE),
+       units = 'cm', height = 20, width = 20, dpi = 300)
 
+#** WSP_both ####
 
-#### Spatio-temporal variability ####
-#*** Friedmann test ####
+variable_WSP_both <- WSP_both[,c(7:30, 35:37)] %>% select(-`Rainfall (mm)`)
 
+corr_WSP_both <- cor(variable_WSP_both, use = 'pairwise')
+p.mat <- cor.mtest(variable_WSP_both)$p
+colnames(p.mat) <- colnames(corr_WSP_both)
+row.names(p.mat) <- colnames(corr_WSP_both)
+
+# GGally Not really nice
+ggsave("Corr_coeff_both.jpeg", ggpairs(variable_WSP_both,
+                                  lower = list(continuous = wrap("smooth", color = "deepskyblue")),
+                                  upper = list(continuous = wrap("cor", size = 3, color = "tomato"))) +
+           theme(panel.grid.minor = element_blank(),
+                 panel.grid.major = element_blank()),
+       units = 'cm', height = 50, width = 50, dpi = 300)
 
 
-river_fried <- river %>% select(c(2, 5, 36:38))
-river_fried_1 <- aggregate(data = river_fried, .~Date + River, mean)
+# corrplot nicer but cannot handle the categorical variables
+
+tiff("corr_coeff_2_both.tiff",units = 'cm',height = 50,width = 50,res = 300, pointsize = 12)
+corrplot(corr_WSP_both, p.mat = p.mat, method = "circle", type = "upper",
+         sig.level = 0.05, insig = "blank", order = "alphabet")
+dev.off()
+
+# use ggcorrplot 
+
+ggsave("Corr_coeff_3_both.jpeg",ggcorrplot(corr_WSP_both,
+                                      hc.order = TRUE,
+                                      type = "lower",
+                                      lab = TRUE),
+       units = 'cm', height = 20, width = 20, dpi = 300)
+ggsave("Corr_coeff_4_both.jpeg",ggcorrplot(corr_WSP_both,
+                                      method="circle",
+                                      hc.order = TRUE,
+                                      type = "lower",
+                                      lab = FALSE),
+       units = 'cm', height = 20, width = 20, dpi = 300)
 
 
+#### Friedmann test ####
+#* CH4 ####
+# were there differences or not? counting for heterogeneity samples unlike KW 
+# cannot for date as it's not an unreplicated complete block design
+#** Pond + Line variability 
 
-#### Wrong_Permutation testing  ####
-# lack of data --> non parameteric analysis (not sure about the distribution of the data)
-# --> using Permanova for multivariate comparison for testing the simultaneous response of one or more variables to one or more
-# factors in an ANOVA experimental design on the basis of any distance measure, using permutation methods
-# to accommodate random effects, hierarchical models, mixed models, quantitative covariates,
-# repeated measures, unbalanced and/or asymmetrical designs, and, most recently, heterogeneous dispersions among groups.
-# or Fried.mann for univariate comparison repeated measures with block effects to avoid dependent samples.
-# Test the multivariate homogeneity of groups dispersions
+WSP_fried <- WSP[,c( 4, 5,7:30, 35:37)]
+WSP_fried_1 <- aggregate(data = WSP_fried, .~Line+Pond, mean)
+WSP_fried_1 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Pond|Line) #insignificant
+WSP_fried_1 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Line|Pond) #insignificant
 
-mod <- betadisper(daisy(GHGes, metric = "euclidean", stand = TRUE), group = river$River) # using betadisper is a multivariate analogue of Levene's test for homogeneity of variances.
-permutest(mod)
-anova(mod)
-plot(mod, hull=FALSE, ellipse=TRUE)
-boxplot(mod)
+#** Pond + Position variability 
 
-# p value > 0.05 --> homogeneity of multivariate dispersions.
-# PERMANOVA (likeANOVA) is very robust to heterogeneity for balanced designs but not unbalanced designs.
-# Fortunately, in this case, it is homoegenous
+WSP_fried <- WSP[,c( 4, 6,7:30, 35:37)]
+WSP_fried_2 <- aggregate(data = WSP_fried, .~Position+Pond, mean)
+WSP_fried_2 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Pond|Position) # significant
+WSP_fried_2 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Position|Pond) # significant
 
-# using Permanova anyway
+#** Line + Position variability 
 
-pairwise.adonis <- function(x,factors, sim.function = 'vegdist', sim.method = 'euclidean', p.adjust.m ='bonferroni'){
-    library(vegan)
+WSP_fried <- WSP[,c( 5, 6,7:30, 35:37)]
+WSP_fried_3 <- aggregate(data = WSP_fried, .~Position+Line, mean)
+WSP_fried_3 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Line|Position) # insignificant
+WSP_fried_3 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Position|Line) # insignificant
 
-    co = combn(unique(as.character(factors)),2)
-    pairs = c()
-    F.Model =c()
-    R2 = c()
-    p.value = c()
+#** Date + Position variability 
 
-    for(elem in 1:ncol(co)){
-        if(sim.function == 'daisy'){
-            library(cluster)
-            x1 = daisy(x[factors %in% c(co[1,elem],co[2,elem]),],metric=sim.method)
-        } else {
-            x1 = vegdist(x[factors %in% c(co[1,elem],co[2,elem]),],method=sim.method)
-        }
-
-        ad = adonis(x1 ~ factors[factors %in% c(co[1,elem],co[2,elem])] );
-        pairs = c(pairs,paste(co[1,elem],'vs',co[2,elem]));
-        F.Model =c(F.Model,ad$aov.tab[1,4]);
-        R2 = c(R2,ad$aov.tab[1,5]);
-        p.value = c(p.value,ad$aov.tab[1,6])
-    }
-
-    p.adjusted = p.adjust(p.value,method=p.adjust.m)
-    sig = c(rep('',length(p.adjusted)))
-    sig[p.adjusted <= 0.05] <-'.'
-    sig[p.adjusted <= 0.01] <-'*'
-    sig[p.adjusted <= 0.001] <-'**'
-    sig[p.adjusted <= 0.0001] <-'***'
-
-    pairw.res = data.frame(pairs,F.Model,R2,p.value,p.adjusted,sig)
-    print("Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1")
-    return(pairw.res)
-
-}
-
-GHGes <- river[,46:48]
-GHGes_dis_matrix <- daisy(GHGes, metric = "euclidean", stand = TRUE)
-
-set.seed(2805)
-
-permanova_river_phys <- adonis(GHGes_dis_matrix ~ T_w + DO + pH + EC+ Sal + Turb + Chlr,
-                               data = river, permutations = 999,
-                               method = "euclidean", strata = river$River)
-summary(permanova_river_phys)
-permanova_river_phys
-permanova_river_phys$aov.tab[,6]
-
-pairwise.adonis(river[,6:13], river$River) #  physical
+WSP_fried <- WSP[,c( 2, 6,7:30, 35:37)]
+WSP_fried_4 <- aggregate(data = WSP_fried, .~Position+Date, mean)
+WSP_fried_4 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Date|Position) #insignificant
+WSP_fried_4 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Position|Date) #insignificant
 
 
-# more about the
+#* CO2 ####
+#** Pond + Line variability 
+
+WSP_fried <- WSP[,c( 4, 5,7:30, 35:37)]
+WSP_fried_1 <- aggregate(data = WSP_fried, .~Line+Pond, mean)
+WSP_fried_1 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Pond|Line) #insignificant
+WSP_fried_1 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Line|Pond) #insignificant
+
+#** Pond + Position variability 
+
+WSP_fried <- WSP[,c( 4, 6,7:30, 35:37)]
+WSP_fried_2 <- aggregate(data = WSP_fried, .~Position+Pond, mean)
+WSP_fried_2 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Pond|Position) # significant
+WSP_fried_2 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Position|Pond) #insignificant
+
+#** Line + Position variability 
+
+WSP_fried <- WSP[,c( 5, 6,7:30, 35:37)]
+WSP_fried_3 <- aggregate(data = WSP_fried, .~Position+Line, mean)
+WSP_fried_3 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Line|Position) # insignificant
+WSP_fried_3 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Position|Line) # insignificant
+
+#** Date + Position variability 
+
+WSP_fried <- WSP[,c( 2, 6,7:30, 35:37)]
+WSP_fried_4 <- aggregate(data = WSP_fried, .~Position+Date, mean)
+WSP_fried_4 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Date|Position) #insignificant
+WSP_fried_4 %>% friedman_test(`Flux_CO2 (mg.m-2.d-1)`~Position|Date) #insignificant
+
+
+#* N2O ####
+#** Pond + Line variability 
+
+WSP_fried <- WSP[,c( 4, 5,7:30, 35:37)]
+WSP_fried_1 <- aggregate(data = WSP_fried, .~Line+Pond, mean)
+WSP_fried_1 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Pond|Line) #insignificant
+WSP_fried_1 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Line|Pond) #insignificant
+
+#** Pond + Position variability
+
+WSP_fried <- WSP[,c( 4, 6,7:30, 35:37)]
+WSP_fried_2 <- aggregate(data = WSP_fried, .~Position+Pond, mean)
+WSP_fried_2 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Pond|Position) # significant
+WSP_fried_2 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Position|Pond) #insignificant
+
+#** Line + Position variability
+
+WSP_fried <- WSP[,c( 5, 6,7:30, 35:37)]
+WSP_fried_3 <- aggregate(data = WSP_fried, .~Position+Line, mean)
+WSP_fried_3 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Line|Position) # insignificant
+WSP_fried_3 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Position|Line) # insignificant
+
+#** Date + Position variability 
+
+WSP_fried <- WSP[,c( 2, 6,7:30, 35:37)]
+WSP_fried_4 <- aggregate(data = WSP_fried, .~Position+Date, mean)
+WSP_fried_4 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Date|Position) #insignificant
+WSP_fried_4 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Position|Date) #insignificant
+
+#### Wilcoxon signedrank test ####
+# identify which groups were different
+#* CH4 ####
+WSP %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
+WSP %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Line, paired = TRUE, p.adjust.method = "bonferroni")
+WSP %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Position, paired = TRUE, p.adjust.method = "bonferroni")
+
+#* CO2 ####
+WSP %>% wilcox_test(`Flux_CO2 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
+WSP %>% wilcox_test(`Flux_CO2 (mg.m-2.d-1)`~ Line, paired = TRUE, p.adjust.method = "bonferroni")
+WSP %>% wilcox_test(`Flux_CO2 (mg.m-2.d-1)`~ Position, paired = TRUE, p.adjust.method = "bonferroni")
+
+#* N2O ####
+
+WSP %>% wilcox_test(`Flux_NO2 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
+WSP %>% wilcox_test(`Flux_NO2 (mg.m-2.d-1)`~ Line, paired = TRUE, p.adjust.method = "bonferroni")
+WSP %>% wilcox_test(`Flux_NO2 (mg.m-2.d-1)`~ Position, paired = TRUE, p.adjust.method = "bonferroni")
+
+#### Mixed model_WSP ####
+# try again with one random effect at a time
+WSP_sta <- WSP
+
+WSP_sta$log_N2O <- log(abs(WSP_sta$`Flux_NO2 (mg.m-2.d-1)`))
+WSP_sta$sta_N2O <- standardize(WSP_sta$log_N2O) 
+WSP_sta$log_CH4 <- log(WSP_sta$`Flux_CH4 (mg.m-2.d-1)`)
+WSP_sta$sta_CH4 <- standardize(WSP_sta$log_CH4) 
+WSP_sta$log_CO2 <- log(WSP_sta$`Flux_CO2 (mg.m-2.d-1)`)
+WSP_sta$sta_CO2 <- standardize(WSP_sta$log_CO2) 
+# Pond and Line ####
+#* N2O #####
+# diagnostic outliers 
+
+# using box plot 
+
+boxplot.stats(WSP_sta$sta_N2O)$out # no outliers
+
+ggsave("Cleveland_N2O.tiff", ggplot(WSP_sta) +
+           aes(x = sta_N2O, y = No) +
+           geom_point(size = 3L, colour = "#0c4c8a") +
+           xlab(bquote("Standardized Dissolved "*N[2]*"O")) +
+           ylab("Order of the data")+
+           theme_bw()+
+           theme(axis.title.y = element_text(size = 14),
+                 axis.title.x = element_text(size = 14),
+                 text = element_text(size = 14)),
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+set.seed(1000)
+
+WSP_lmm_N2O <- lmer(sta_N2O~1+(1|Pond/Line), data = WSP_sta)
+r.squaredGLMM(WSP_lmm_N2O)
+summary(WSP_lmm_N2O)
+vcov(WSP_lmm_N2O)
+var_N2O <- as.data.frame(VarCorr(WSP_lmm_N2O))
+ICC_Line_N2O <- var_N2O$vcov[1]/sum(var_N2O$vcov)
+ICC_WSP_N2O <- (var_N2O$vcov[1] + var_N2O$vcov[2])/sum(var_N2O$vcov)
+
+#* CO2 #####
+# diagnostic outliers 
+
+# using box plot 
+
+boxplot.stats(WSP_sta$sta_CO2)$out # no outliers
+
+ggsave("Cleveland_CO2.tiff", ggplot(WSP_sta) +
+           aes(x = sta_CO2, y = No) +
+           geom_point(size = 3L, colour = "#0c4c8a") +
+           xlab(bquote("Standardized Dissolved "*N[2]*"O")) +
+           ylab("Order of the data")+
+           theme_bw()+
+           theme(axis.title.y = element_text(size = 14),
+                 axis.title.x = element_text(size = 14),
+                 text = element_text(size = 14)),
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+set.seed(1000)
+
+WSP_lmm_CO2 <- lmer(sta_CO2~1+(1|Pond/Line), data = WSP_sta)
+r.squaredGLMM(WSP_lmm_CO2)
+summary(WSP_lmm_CO2)
+vcov(WSP_lmm_CO2)
+var_CO2 <- as.data.frame(VarCorr(WSP_lmm_CO2))
+ICC_Line_CO2 <- var_CO2$vcov[1]/sum(var_CO2$vcov)
+ICC_WSP_CO2 <- (var_CO2$vcov[1] + var_CO2$vcov[2])/sum(var_CO2$vcov)
+
+#* CH4 #####
+# diagnostic outliers 
+
+# using box plot 
+
+boxplot.stats(WSP_sta$sta_CH4)$out # no outliers
+
+WSP
+
+ggsave("Cleveland_CH4.tiff", ggplot(WSP_sta[WSP_sta$sta_CH4 < 2.46,]) +
+           aes(x = sta_CH4, y = No) +
+           geom_point(size = 3L, colour = "#0c4c8a") +
+           xlab(bquote("Standardized Dissolved "*N[2]*"O")) +
+           ylab("Order of the data")+
+           theme_bw()+
+           theme(axis.title.y = element_text(size = 14),
+                 axis.title.x = element_text(size = 14),
+                 text = element_text(size = 14)),
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+set.seed(1000)
+
+WSP_lmm_CH4 <- lmer(sta_CH4~1+(1|Pond/Line), data = WSP_sta[WSP_sta$sta_CH4 < 2.46,])
+r.squaredGLMM(WSP_lmm_CH4)
+summary(WSP_lmm_CH4)
+vcov(WSP_lmm_CH4)
+var_CH4 <- as.data.frame(VarCorr(WSP_lmm_CH4))
+ICC_Line_CH4 <- var_CH4$vcov[1]/sum(var_CH4$vcov)
+ICC_WSP_CH4 <- (var_CH4$vcov[1] + var_CH4$vcov[2])/sum(var_CH4$vcov)
+
+# Pond and Position ####
+#* N2O #####
+
+WSP_lmm_N2O <- lmer(sta_N2O~1+(1|Pond/Position), data = WSP_sta)
+r.squaredGLMM(WSP_lmm_N2O)
+summary(WSP_lmm_N2O)
+vcov(WSP_lmm_N2O)
+var_N2O <- as.data.frame(VarCorr(WSP_lmm_N2O))
+ICC_Position_N2O <- var_N2O$vcov[1]/sum(var_N2O$vcov)
+ICC_WSP2_N2O <- (var_N2O$vcov[1] + var_N2O$vcov[2])/sum(var_N2O$vcov)
+
+#* CO2 #####
+
+set.seed(1000)
+
+WSP_lmm_CO2 <- lmer(sta_CO2~1+(1|Pond/Position), data = WSP_sta)
+r.squaredGLMM(WSP_lmm_CO2)
+summary(WSP_lmm_CO2)
+vcov(WSP_lmm_CO2)
+var_CO2 <- as.data.frame(VarCorr(WSP_lmm_CO2))
+ICC_Position_CO2 <- var_CO2$vcov[1]/sum(var_CO2$vcov)
+ICC_WSP2_CO2 <- (var_CO2$vcov[1] + var_CO2$vcov[2])/sum(var_CO2$vcov)
+
+#* CH4 #####
+
+set.seed(1000)
+
+WSP_lmm_CH4 <- lmer(sta_CH4~1+(1|Pond/Position), data = WSP_sta[WSP_sta$sta_CH4 < 2.46,])
+r.squaredGLMM(WSP_lmm_CH4)
+summary(WSP_lmm_CH4)
+vcov(WSP_lmm_CH4)
+var_CH4 <- as.data.frame(VarCorr(WSP_lmm_CH4))
+ICC_Position_CH4 <- var_CH4$vcov[1]/sum(var_CH4$vcov)
+ICC_WSP2_CH4 <- (var_CH4$vcov[1] + var_CH4$vcov[2])/sum(var_CH4$vcov)
+
+#### PCA_WSP_both ####
+# use prcomp in the package MASS
+
+WSP_both_PCA <- WSP_both[,c(7:9, 12, 15:27)]
+WSP_labels <- str_split_fixed(colnames(WSP_both_PCA), " \\(", n = 2)[,1]
+colnames(WSP_both_PCA) <- WSP_labels
+
+WSP_cor <- cor(WSP_both_PCA, use = "na.or.complete")
+
+WSP_both_PCA_2 <- prcomp(WSP_both_PCA, scale. = TRUE)
+
+WSP_both_PCA_2
+summary(WSP_both_PCA_2)
+
+# Eigenvectors (= matrix U)
+WSP_both_PCA_2$rotation
+
+# Component matrix (= matrix A)
+WSP_both_PCA_2$rotation %*% diag(WSP_both_PCA_2$sdev)
+
+#' Component scores (= matrix C)
+WSP_both_PCA_2$x
+head(WSP_both_PCA_2$x)
+
+# Scree plot
+ggscreeplot(WSP_both_PCA_2) + geom_col()
+
+# Biplot
+WSP_CO2 <- WSP_both$`Flux_CO2 (mg.m-2.d-1)`
+WSP_CH4 <- WSP_both$`Flux_CH4 (mg.m-2.d-1)`
+WSP_Pond <- as.factor(WSP_both$Pond)
+
+#** CO2 ####
+
+ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
+    geom_point(aes(color = WSP_CO2 , shape = WSP_Pond, size = WSP_CO2)) +
+    scale_color_gradient(low = "blue", high = "red") + 
+    theme_classic() +
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+#** CH4 ####
+
+ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
+    geom_point(aes(color = WSP_CH4 , shape = WSP_Pond, size = WSP_CH4)) +
+    scale_color_gradient(low = "blue", high = "red") + 
+    theme_classic() +
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+#### K means_stats clusering (no hyperparameter tuning) ####
+#** using K means to classify PC1 and PC2 ####
+# Doesn't add much added values
+
+
+WSP_both_kmean <- WSP_both_PCA_2$x[,1:2]
+
+# Using the elbow method to find the optimal number of clusters
+
+set.seed(1)
+wcss <- vector()
+for (i in 1:10) wcss[i] <- sum(kmeans(WSP_both_kmean, i)$withinss)
+plot(1:10,
+     wcss,
+     type = 'b',
+     main = paste('The Elbow Method'),
+     xlab = 'Number of clusters',
+     ylab = 'WCSS')
+
+# Fitting K-Means to the dataset
+
+set.seed(10)
+WSP_both_kmeans <- kmeans(x = WSP_both_kmean, centers = 4)
+WSP_both_y_kmeans <- WSP_both_kmeans$cluster
+
+# Visualising the clusters
+clusplot(WSP_both_kmean,
+         WSP_both_y_kmeans,
+         lines = 0,
+         shade = TRUE,
+         color = TRUE,
+         labels = 2,
+         plotchar = FALSE,
+         span = TRUE,
+         main = paste('Clusters of customers'),
+         xlab = 'PC1',
+         ylab = 'PC2')
+
+#** CO2 ####
+WSP_both_PCA_kmeans_CO2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =4, labels.size= 6, ) +
+    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CO2)) +
+    scale_color_brewer(palette = "Dark2") + 
+    theme_classic() +
+    ylab("PC2 (19.2%)")+
+    xlab("PC1 (31.8%)") + 
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+ggsave("PCA_Kmeans_CO2.jpeg", WSP_both_PCA_kmeans,
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+WSP_both_PCA_kmeans_editable_CO2 <- dml(ggobj = WSP_both_PCA_kmeans_CO2)
+WSP_both_PCA_kmeans_doc <- read_pptx()
+WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
+WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CO2,
+               location = ph_location_type(type = "body") )
+print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CO2.pptx")
+
+#** CH4 ####
+
+WSP_both_PCA_kmeans_CH4 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
+    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CH4)) +
+    scale_color_brewer(palette = "Dark2") + 
+    theme_classic() +
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    ylab("PC2 (19.2%)")+
+    xlab("PC1 (31.8%)") + 
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+ggsave("PCA_Kmeans_CH4.jpeg", WSP_both_PCA_kmeans_CH4,
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+WSP_both_PCA_kmeans_editable_CH4 <- dml(ggobj = WSP_both_PCA_kmeans_CH4)
+WSP_both_PCA_kmeans_doc <- read_pptx()
+WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
+WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CH4,
+                                   location = ph_location_type(type = "body") )
+print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4.pptx")
+
+
+#** Correct_using K means to classify CO2 and CH4 ####
+
+WSP_both_kmean <- WSP_both %>% select(`Flux_CO2 (mg.m-2.d-1)`,`Flux_CH4 (mg.m-2.d-1)`)
+
+# Using the elbow method to find the optimal number of clusters
+
+set.seed(1)
+wcss <- vector()
+for (i in 1:10) wcss[i] <- sum(kmeans(WSP_both_kmean, i)$withinss)
+plot(1:10,
+     wcss,
+     type = 'b',
+     main = paste('The Elbow Method'),
+     xlab = 'Number of clusters',
+     ylab = 'WCSS')
+
+# Fitting K-Means to the dataset
+
+set.seed(10)
+WSP_both_kmeans <- kmeans(x = WSP_both_kmean, centers = 4, iter.max = 1000, nstart = 10)
+WSP_both_y_kmeans <- WSP_both_kmeans$cluster
+
+# Visualising the clusters
+clusplot(WSP_both_kmean,
+         WSP_both_y_kmeans,
+         lines = 0,
+         shade = TRUE,
+         color = TRUE,
+         labels = 2,
+         plotchar = FALSE,
+         span = TRUE,
+         main = paste('Clusters of customers'),
+         xlab = 'PC1',
+         ylab = 'PC2')
+
+#** CO2 ####
+WSP_both_PCA_kmeans_CO2_v2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =4, labels.size= 6, ) +
+    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CO2)) +
+    scale_color_brewer(palette = "Dark2") + 
+    theme_classic() +
+    ylab("PC2 (19.2%)")+
+    xlab("PC1 (31.8%)") + 
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+ggsave("PCA_Kmeans_CO2_v2.jpeg", WSP_both_PCA_kmeans_CO2_v2,
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+WSP_both_PCA_kmeans_editable_CO2_v2 <- dml(ggobj = WSP_both_PCA_kmeans_CO2_v2)
+WSP_both_PCA_kmeans_doc <- read_pptx()
+WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
+WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CO2_v2,
+                                   location = ph_location_type(type = "body") )
+print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CO2_v2.pptx")
+
+#** CH4 ####
+
+WSP_both_PCA_kmeans_CH4_v2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
+    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CH4)) +
+    scale_color_brewer(palette = "Dark2") + 
+    theme_classic() +
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    ylab("PC2 (19.2%)")+
+    xlab("PC1 (31.8%)") + 
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+ggsave("PCA_Kmeans_CH4_v2.jpeg", WSP_both_PCA_kmeans_CH4,
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+WSP_both_PCA_kmeans_editable_CH4_v2 <- dml(ggobj = WSP_both_PCA_kmeans_CH4_v2)
+WSP_both_PCA_kmeans_doc <- read_pptx()
+WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
+WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CH4_v2,
+                                   location = ph_location_type(type = "body"))
+print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4_v2.pptx")
+
+#### Not_working_K means clusering (hyperparameter tuning) ####
+
+# choose the dataset
+WSP_both_kmean <- WSP_both[,28:29]
+colnames(WSP_both_kmean) <- c("CO2", "CH4")
+WSP_both_kmean <- as.data.frame(WSP_both_PCA_2$x[,1:2])
+
+# create mlr task
+WSP_both_kmean_make_task <- makeClusterTask(data = WSP_both_kmean)
+
+# make a mlr learner
+set.seed(1234)
+k_means_hyper <- makeLearner("cluster.MiniBatchKmeans")
+getParamSet(k_means_hyper)
+
+# resampling a learner
+k_means_resample_learner <- makeResampleDesc(method = "CV", iters = 6)
+
+# set parallel backend 
+parallelStartSocket(cpus = detectCores()-1)
+
+k_means_resample <- resample(learner = k_means_hyper, task = WSP_both_kmean_make_task, resampling = k_means_resample_learner)
+
+# Tuning hyperparameters: clusters, number
+# Only tune three abovementioned hyperparameters
+
+k_means_make_paraset <- makeParamSet(makeIntegerParam("clusters", lower = 1, upper = 10),
+                                     makeIntegerParam("num_init", lower = 1, upper = 15),
+                                     makeIntegerParam("max_iters", lower = 100, upper = 1000)
+                                     )
+k_means_make_tune <- makeTuneControlMBO(budget = 1)
+k_means_hyper_tune <- tuneParams(learner = k_means_hyper, task = WSP_both_kmean_make_task, resampling = k_means_resample_learner,
+                                 par.set = k_means_make_paraset, control = k_means_make_tune, show.info = TRUE)
+
+parallelStop()
+k_means_hyper_tune
+
+
+#### Random_forests (hyperparameter tuning) ####
+#** CO2 ####
+
+WSP_both_RF <- WSP_both[,c(7:9, 12, 15:28)]
+WSP_labels <- str_split_fixed(colnames(WSP_both_RF), " \\(", n = 2)[,1]
+WSP_labels <- str_replace_all(WSP_labels, " ", "_")
+WSP_labels <- str_replace_all(WSP_labels, "-", "")
+WSP_labels <- str_replace_all(WSP_labels, "\\+", "")
+colnames(WSP_both_RF) <- WSP_labels
+
+trainTask_CO2_2 <- makeRegrTask(data = WSP_both_RF,target = "Flux_CO2")
+
+# create mlr learner
+set.seed(1234)
+lrn_CO2_2 <- makeLearner("regr.ranger")
+# lrn_CO2_2$par.vals <- list(ntree = 100L, importance = TRUE)
+cv_CO2_2 <- makeResampleDesc(method = "LOO")
+# set parallel backend
+parallelStartSocket(cpus = detectCores()-1)
+res_CO2_2 <- resample(learner = lrn_CO2_2, task = trainTask_CO2_2, resampling = cv_CO2_2)
+# Tuning hyperparameters
+
+# Parameter Tuning: Mainly, there are three parameters in the random forest algorithm which you should look at (for tuning):
+# ntree - The number of trees to grow. Larger the tree, it will be more computationally expensive to build models.
+# mtry - It refers to how many variables we should select at a node split. 
+# Also as mentioned above, the default value is p/3 for regression and sqrt(p) for classification. 
+# We should always try to avoid using smaller values of mtry to avoid overfitting.
+# nodesize - It refers to how many observations we want in the terminal nodes.
+# This parameter is directly related to tree depth. Higher the number, lower the tree depth. 
+# With lower tree depth, the tree might even fail to recognize useful signals from the data.
+
+# To know which hyperparameter can be tuned using getParamSet
+getParamSet(lrn_CO2_2)
+
+# Only tune three abovementioned hyperparameters
+
+params_CO2_2 <- makeParamSet(makeIntegerParam("mtry", lower = 2, upper = 10),
+                             makeIntegerParam("min.node.size", lower = 2, upper = 25))
+tc_CO2_2 <- makeTuneControlMBO(budget = 100)
+tr_CO2_2 <- tuneParams(learner = lrn_CO2_2, task = trainTask_CO2_2, resampling = cv_CO2_2,
+                       par.set = params_CO2_2, control = tc_CO2_2, show.info = TRUE)
+
+parallelStop()
+tr_CO2_2
+# Tune result:
+# Op. pars: mtry=7; min.node.size=5
+# mse.test.mean=33372461.4207402
+# Apply the optimal RF
+
+# using ranger package with permutation feature importance
+set.seed(1234)
+regressor_CO2_2_opt_ranger <- ranger(formula = Flux_CO2~., data = WSP_both_RF, num.trees =  1000, mtry = 7, 
+                                     importance = 'permutation', min.node.size = 5) 
+imp_CO2_2_opt_per <- importance_pvalues(x = regressor_CO2_2_opt_ranger, method = 'janitza', num.permutations = 100)
+
+featureImportance_CO2_2_opt_per <- data.frame(Feature=row.names(imp_CO2_2_opt_per), Importance=imp_CO2_2_opt_per[,1], 
+                                              pvalue=imp_CO2_2_opt_per[,2])
+# remove the variables with pvalue >0.05
+featureImportance_CO2_2_opt_per <- featureImportance_CO2_2_opt_per %>% filter(pvalue <=0.05)
+
+labels_CO2_2_per <- c("DO", "Air ~ temperature", "pH", "Total ~ Dissolved ~ Gas", "PO[4]^3^-{}", "Solar ~ radiation",
+                      "BOD[5]", "Water ~ temperature", "Chlorophyll*~alpha", "Wind"
+                      # , 
+                      # "TP", "NH[4]^+{}"
+                      )
+labels_CO2_2_per <- rev(labels_CO2_2_per)
+labels_CO2_2_per_parse <- parse(text = labels_CO2_2_per)
+
+ggsave("RF_CO2_2_opt_per.tiff", ggplot(featureImportance_CO2_2_opt_per[1:10,], aes(x=reorder(Feature, Importance), y=Importance)) +
+           geom_bar(stat="identity", fill="tomato") +
+           coord_flip() + 
+           theme_bw(base_size=20) +
+           scale_x_discrete(labels = labels_CO2_2_per_parse) +
+           scale_y_continuous(labels = seq(from = 0.1, to = 0.5, length.out = 5))+
+           labs(x = NULL, y = "Scale Importance") + 
+           ggtitle(bquote("C"*O[2]*"")) +
+           theme(plot.title=element_text(size=18)),
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+#** CH4 ####
+
+WSP_both_RF <- WSP_both[,c(7:9, 12, 15:27, 29)]
+WSP_both_RF <- WSP_both_RF[-5,]
+WSP_labels <- str_split_fixed(colnames(WSP_both_RF), " \\(", n = 2)[,1]
+WSP_labels <- str_replace_all(WSP_labels, " ", "_")
+WSP_labels <- str_replace_all(WSP_labels, "-", "")
+WSP_labels <- str_replace_all(WSP_labels, "\\+", "")
+colnames(WSP_both_RF) <- WSP_labels
+
+trainTask_CH4_2 <- makeRegrTask(data = WSP_both_RF,target = "Flux_CH4")
+
+# create mlr learner
+set.seed(1234)
+lrn_CH4_2 <- makeLearner("regr.ranger")
+# lrn_CH4_2$par.vals <- list(ntree = 100L, importance = TRUE)
+cv_CH4_2 <- makeResampleDesc(method = "LOO")
+# set parallel backend
+parallelStartSocket(cpus = detectCores()-1)
+res_CH4_2 <- resample(learner = lrn_CH4_2, task = trainTask_CH4_2, resampling = cv_CH4_2)
+# Tuning hyperparameters
+
+# Parameter Tuning: Mainly, there are three parameters in the random forest algorithm which you should look at (for tuning):
+# ntree - The number of trees to grow. Larger the tree, it will be more computationally expensive to build models.
+# mtry - It refers to how many variables we should select at a node split. 
+# Also as mentioned above, the default value is p/3 for regression and sqrt(p) for classification. 
+# We should always try to avoid using smaller values of mtry to avoid overfitting.
+# nodesize - It refers to how many observations we want in the terminal nodes.
+# This parameter is directly related to tree depth. Higher the number, lower the tree depth. 
+# With lower tree depth, the tree might even fail to recognize useful signals from the data.
+
+# To know which hyperparameter can be tuned using getParamSet
+getParamSet(lrn_CH4_2)
+
+# Only tune three abovementioned hyperparameters
+
+params_CH4_2 <- makeParamSet(makeIntegerParam("mtry", lower = 2, upper = 10),
+                             makeIntegerParam("min.node.size", lower = 2, upper = 25))
+tc_CH4_2 <- makeTuneControlMBO(budget = 100)
+tr_CH4_2 <- tuneParams(learner = lrn_CH4_2, task = trainTask_CH4_2, resampling = cv_CH4_2,
+                       par.set = params_CH4_2, control = tc_CH4_2, show.info = TRUE)
+
+parallelStop()
+tr_CH4_2
+# Tune result:
+# Op. pars: mtry=9; min.node.size=4
+# mse.test.mean=17120917.2389713
+# Apply the optimal RF
+
+# using ranger package with permutation feature importance
+set.seed(1234)
+regressor_CH4_2_opt_ranger <- ranger(formula = Flux_CH4~., data = WSP_both_RF, num.trees =  1000, mtry = 9, 
+                                     importance = 'permutation', min.node.size = 4) 
+imp_CH4_2_opt_per <- importance_pvalues(x = regressor_CH4_2_opt_ranger, method = 'janitza', num.permutations = 100)
+
+featureImportance_CH4_2_opt_per <- data.frame(Feature=row.names(imp_CH4_2_opt_per), Importance=imp_CH4_2_opt_per[,1], 
+                                              pvalue=imp_CH4_2_opt_per[,2])
+# remove the variables with pvalue >0.05
+featureImportance_CH4_2_opt_per <- featureImportance_CH4_2_opt_per %>% filter(pvalue <=0.05)
+
+labels_CH4_2_per <- c("BOD[5]", "Total ~ Dissolved ~ Gas", "Air ~ temperature", "DO", "pH", "Water ~ temperature", "TN", "COD",
+                      "PO[4]^3^-{}", "TP")
+labels_CH4_2_per <- rev(labels_CH4_2_per)
+labels_CH4_2_per_parse <- parse(text = labels_CH4_2_per)
+
+ggsave("RF_CH4_2_opt_per.tiff", ggplot(featureImportance_CH4_2_opt_per[1:10,], aes(x=reorder(Feature, Importance), y=Importance)) +
+           geom_bar(stat="identity", fill="tomato") +
+           coord_flip() + 
+           theme_bw(base_size=20) +
+           scale_x_discrete(labels = labels_CH4_2_per_parse) +
+           scale_y_continuous(labels = seq(from = 0.1, to = 0.5, length.out = 5))+
+           labs(x = NULL, y = "Scale Importance") +
+           ggtitle(bquote("C"*H[4]*"")) +
+           theme(plot.title=element_text(size=18)),
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
 
 
