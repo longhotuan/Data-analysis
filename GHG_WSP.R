@@ -685,7 +685,7 @@ WSP_fried_4 <- aggregate(data = WSP_fried, .~Position+Date, mean)
 WSP_fried_4 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Date|Position) #insignificant
 WSP_fried_4 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Position|Date) #insignificant
 
-#### Wilcoxon signedrank test ####
+#### Wilcoxon signed-rank test ####
 # identify which groups were different
 #* CH4 ####
 WSP %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
@@ -713,7 +713,7 @@ WSP_sta$log_CH4 <- log(WSP_sta$`Flux_CH4 (mg.m-2.d-1)`)
 WSP_sta$sta_CH4 <- standardize(WSP_sta$log_CH4) 
 WSP_sta$log_CO2 <- log(WSP_sta$`Flux_CO2 (mg.m-2.d-1)`)
 WSP_sta$sta_CO2 <- standardize(WSP_sta$log_CO2) 
-# Pond and Line ####
+# Pond and Line-no significance ####
 #* N2O #####
 # diagnostic outliers 
 
@@ -800,7 +800,7 @@ var_CH4 <- as.data.frame(VarCorr(WSP_lmm_CH4))
 ICC_Line_CH4 <- var_CH4$vcov[1]/sum(var_CH4$vcov)
 ICC_WSP_CH4 <- (var_CH4$vcov[1] + var_CH4$vcov[2])/sum(var_CH4$vcov)
 
-# Pond and Position ####
+# Pond and Position-no significance ####
 #* N2O #####
 
 WSP_lmm_N2O <- lmer(sta_N2O~1+(1|Pond/Position), data = WSP_sta)
@@ -1075,48 +1075,10 @@ WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kme
                                    location = ph_location_type(type = "body"))
 print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4_v2.pptx")
 
-#### wrong_K means clusering (hyperparameter tuning) ####
-
-# choose the dataset
-WSP_both_kmean <- WSP_both[,28:29]
-colnames(WSP_both_kmean) <- c("CO2", "CH4")
-WSP_both_kmean <- as.data.frame(WSP_both_PCA_2$x[,1:2])
-
-# create mlr task
-WSP_both_kmean_make_task <- makeClusterTask(data = WSP_both_kmean)
-
-# make a mlr learner
-set.seed(1234)
-k_means_hyper <- makeLearner("cluster.MiniBatchKmeans")
-getParamSet(k_means_hyper)
-
-# resampling a learner
-k_means_resample_learner <- makeResampleDesc(method = "CV", iters = 6)
-
-# set parallel backend 
-parallelStartSocket(cpus = detectCores()-1)
-
-k_means_resample <- resample(learner = k_means_hyper, task = WSP_both_kmean_make_task, resampling = k_means_resample_learner)
-
-# Tuning hyperparameters: clusters, number
-# Only tune three abovementioned hyperparameters
-
-k_means_make_paraset <- makeParamSet(makeIntegerParam("clusters", lower = 1, upper = 10),
-                                     makeIntegerParam("num_init", lower = 1, upper = 15),
-                                     makeIntegerParam("max_iters", lower = 100, upper = 1000)
-                                     )
-k_means_make_tune <- makeTuneControlMBO(budget = 1)
-k_means_hyper_tune <- tuneParams(learner = k_means_hyper, task = WSP_both_kmean_make_task, resampling = k_means_resample_learner,
-                                 par.set = k_means_make_paraset, control = k_means_make_tune, show.info = TRUE)
-
-parallelStop()
-k_means_hyper_tune
-
-
 #### correct_RF (hyperparameter tuning) ####
 #** CO2 ####
 
-WSP_both_RF <- WSP_both[,c(7:9, 12, 15:28)]
+WSP_both_RF <- WSP_both[,c(7, 8, 10, 12, 15:28)]
 WSP_labels <- str_split_fixed(colnames(WSP_both_RF), " \\(", n = 2)[,1]
 WSP_labels <- str_replace_all(WSP_labels, " ", "_")
 WSP_labels <- str_replace_all(WSP_labels, "-", "")
@@ -1158,14 +1120,14 @@ tr_CO2_2 <- tuneParams(learner = lrn_CO2_2, task = trainTask_CO2_2, resampling =
 parallelStop()
 tr_CO2_2
 # Tune result:
-# Op. pars: mtry=7; min.node.size=5
-# mse.test.mean=33372461.4207402
+# Op. pars: mtry=6; min.node.size=2
+# mse.test.mean=34718792.6322091
 # Apply the optimal RF
 
 # using ranger package with permutation feature importance
 set.seed(1234)
-regressor_CO2_2_opt_ranger <- ranger(formula = Flux_CO2~., data = WSP_both_RF, num.trees =  1000, mtry = 7, 
-                                     importance = 'permutation', min.node.size = 5) 
+regressor_CO2_2_opt_ranger <- ranger(formula = Flux_CO2~., data = WSP_both_RF, num.trees =  1000, mtry = 6, 
+                                     importance = 'permutation', min.node.size = 2) 
 imp_CO2_2_opt_per <- importance_pvalues(x = regressor_CO2_2_opt_ranger, method = 'janitza', num.permutations = 100)
 
 featureImportance_CO2_2_opt_per <- data.frame(Feature=row.names(imp_CO2_2_opt_per), Importance=imp_CO2_2_opt_per[,1], 
@@ -1173,8 +1135,8 @@ featureImportance_CO2_2_opt_per <- data.frame(Feature=row.names(imp_CO2_2_opt_pe
 # remove the variables with pvalue >0.05
 featureImportance_CO2_2_opt_per <- featureImportance_CO2_2_opt_per %>% filter(pvalue <=0.05)
 
-labels_CO2_2_per <- c("DO", "Air ~ temperature", "pH", "Total ~ Dissolved ~ Solids", "PO[4]^3^-{}", "Solar ~ radiation",
-                      "BOD[5]", "Water ~ temperature", "Chlorophyll*~alpha", "Wind")
+labels_CO2_2_per <- c("DO", "Air ~ temperature", "pH", "Total ~ Dissolved ~ Solids", "PO[4]^3^-{}", 
+                      "BOD[5]", "Solar ~ radiation","Water ~ temperature", "Chlorophyll*~alpha", "Wind")
 labels_CO2_2_per <- rev(labels_CO2_2_per)
 labels_CO2_2_per_parse <- parse(text = labels_CO2_2_per)
 
@@ -1183,7 +1145,7 @@ ggsave("RF_CO2_2_opt_per.tiff", ggplot(featureImportance_CO2_2_opt_per[1:10,], a
            coord_flip() + 
            theme_bw(base_size=20) +
            scale_x_discrete(labels = labels_CO2_2_per_parse) +
-           scale_y_continuous(labels = seq(from = 0.1, to = 0.5, length.out = 5))+
+           scale_y_continuous(labels = seq(from = 0.1, to = 0.4, length.out = 4))+
            labs(x = NULL, y = "Scale Importance") + 
            ggtitle(bquote("C"*O[2]*"")) +
            theme(plot.title=element_text(size=18)),
@@ -1191,7 +1153,7 @@ ggsave("RF_CO2_2_opt_per.tiff", ggplot(featureImportance_CO2_2_opt_per[1:10,], a
 
 #** CH4 ####
 
-WSP_both_RF <- WSP_both[,c(7:9, 12, 15:27, 29)]
+WSP_both_RF <- WSP_both[,c(7, 8, 10, 12, 15:27, 29)]
 WSP_both_RF <- WSP_both_RF[-5,]
 WSP_labels <- str_split_fixed(colnames(WSP_both_RF), " \\(", n = 2)[,1]
 WSP_labels <- str_replace_all(WSP_labels, " ", "_")
@@ -1211,15 +1173,6 @@ parallelStartSocket(cpus = detectCores()-1)
 res_CH4_2 <- resample(learner = lrn_CH4_2, task = trainTask_CH4_2, resampling = cv_CH4_2)
 # Tuning hyperparameters
 
-# Parameter Tuning: Mainly, there are three parameters in the random forest algorithm which you should look at (for tuning):
-# ntree - The number of trees to grow. Larger the tree, it will be more computationally expensive to build models.
-# mtry - It refers to how many variables we should select at a node split. 
-# Also as mentioned above, the default value is p/3 for regression and sqrt(p) for classification. 
-# We should always try to avoid using smaller values of mtry to avoid overfitting.
-# nodesize - It refers to how many observations we want in the terminal nodes.
-# This parameter is directly related to tree depth. Higher the number, lower the tree depth. 
-# With lower tree depth, the tree might even fail to recognize useful signals from the data.
-
 # To know which hyperparameter can be tuned using getParamSet
 getParamSet(lrn_CH4_2)
 
@@ -1234,8 +1187,8 @@ tr_CH4_2 <- tuneParams(learner = lrn_CH4_2, task = trainTask_CH4_2, resampling =
 parallelStop()
 tr_CH4_2
 # Tune result:
-# Op. pars: mtry=9; min.node.size=4
-# mse.test.mean=17120917.2389713
+# Op. pars: mtry=10; min.node.size=5
+# mse.test.mean=16952445.4909653
 # Apply the optimal RF
 
 # using ranger package with permutation feature importance
@@ -1249,8 +1202,8 @@ featureImportance_CH4_2_opt_per <- data.frame(Feature=row.names(imp_CH4_2_opt_pe
 # remove the variables with pvalue >0.05
 featureImportance_CH4_2_opt_per <- featureImportance_CH4_2_opt_per %>% filter(pvalue <=0.05)
 
-labels_CH4_2_per <- c("BOD[5]", "Total ~ Dissolved ~ Solids", "Air ~ temperature", "DO", "pH", "Water ~ temperature", "TN", "COD",
-                      "PO[4]^3^-{}", "TP")
+labels_CH4_2_per <- c("BOD[5]", "DO", "Total ~ Dissolved ~ Solids", "Air ~ temperature", "pH", "PO[4]^3^-{}", "COD","Water ~ temperature", "TN", 
+                      "TP")
 labels_CH4_2_per <- rev(labels_CH4_2_per)
 labels_CH4_2_per_parse <- parse(text = labels_CH4_2_per)
 
@@ -1264,324 +1217,3 @@ ggsave("RF_CH4_2_opt_per.tiff", ggplot(featureImportance_CH4_2_opt_per[1:10,], a
            ggtitle(bquote("C"*H[4]*"")) +
            theme(plot.title=element_text(size=18)),
        units = 'cm', height = 20, width = 20, dpi = 300)
-
-
-
-
-#### wrong_PCA & K_means & RF ####
-#** PCA for CO2 ####
-
-# use prcomp in the package MASS
-PCA_CO2_var <- as.character(as.matrix(featureImportance_CO2_2_opt_per %>% arrange(desc(Importance)) %>% dplyr::select(`Feature`) %>% dplyr::slice(1:10)))
-
-WSP_labels <- str_split_fixed(colnames(WSP_both), " \\(", n = 2)[,1]
-WSP_labels <- str_replace_all(WSP_labels, " ", "_")
-WSP_labels <- str_replace_all(WSP_labels, "-", "")
-WSP_labels <- str_replace_all(WSP_labels, "\\+", "")
-colnames(WSP_both) <- WSP_labels
-
-WSP_both_PCA <- WSP_both[, PCA_CO2_var]
-
-WSP_cor <- cor(WSP_both_PCA, use = "na.or.complete")
-
-WSP_both_PCA_2 <- prcomp(WSP_both_PCA, scale. = TRUE)
-
-WSP_both_PCA_2
-summary(WSP_both_PCA_2)
-
-# Eigenvectors (= matrix U)
-WSP_both_PCA_2$rotation
-
-# Component matrix (= matrix A)
-WSP_both_PCA_2$rotation %*% diag(WSP_both_PCA_2$sdev)
-
-#' Component scores (= matrix C)
-WSP_both_PCA_2$x
-head(WSP_both_PCA_2$x)
-
-# Scree plot
-ggscreeplot(WSP_both_PCA_2) + geom_col()
-
-# Biplot
-WSP_CO2 <- WSP_both$`Flux_CO2`
-WSP_CH4 <- WSP_both$`Flux_CH4`
-WSP_Pond <- as.factor(WSP_both$Pond)
-
-ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
-    geom_point(aes(color = WSP_CO2 , shape = WSP_Pond, size = WSP_CO2)) +
-    scale_color_gradient(low = "blue", high = "red") + 
-    theme_classic() +
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-
-#** K means for CO2 ####
-PCA_CO2_var <- c(PCA_CO2_var, "Flux_CO2")
-
-WSP_both_kmean <- WSP_both[, PCA_CO2_var]
-
-# Using the elbow method to find the optimal number of clusters
-
-set.seed(1)
-wcss <- vector()
-for (i in 1:10) wcss[i] <- sum(kmeans(WSP_both_kmean, i)$withinss)
-plot(1:10,
-     wcss,
-     type = 'b',
-     main = paste('The Elbow Method'),
-     xlab = 'Number of clusters',
-     ylab = 'WCSS')
-# 3 clusters is ok
-# Fitting K-Means to the dataset
-
-set.seed(10)
-WSP_both_kmeans <- kmeans(x = WSP_both_kmean, centers = 3, iter.max = 1000, nstart = 10)
-WSP_both_y_kmeans <- WSP_both_kmeans$cluster
-
-# Visualising the clusters
-clusplot(WSP_both_kmean,
-         WSP_both_y_kmeans,
-         lines = 0,
-         shade = TRUE,
-         color = TRUE,
-         labels = 2,
-         plotchar = FALSE,
-         span = TRUE,
-         main = paste('Clusters of customers'),
-         xlab = 'PC1',
-         ylab = 'PC2')
-
-labels_WSP_kmeans <- paste(WSP_both$Pond)
-
-WSP_both_PCA_kmeans_CO2_v3 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =4, labels.size= 6, circle = TRUE) +
-    geom_point(aes(
-        color =  as.factor(WSP_both_kmeans$cluster) ,
-        shape = WSP_Pond, size = WSP_CO2)) +
-    scale_color_brewer(palette = "Dark2") + 
-    theme_classic() +
-    ylab("PC2 (12.9%)")+
-    xlab("PC1 (48.8%)") +
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-WSP_both_PCA_kmeans_CO2_v3
-ggsave("PCA_Kmeans_CO2_v3.jpeg", WSP_both_PCA_kmeans_CO2_v3,
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-WSP_both_PCA_kmeans_editable_CO2_v3 <- dml(ggobj = WSP_both_PCA_kmeans_CO2_v3)
-WSP_both_PCA_kmeans_doc <- read_pptx()
-WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
-WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CO2_v3,
-                                   location = ph_location_type(type = "body") )
-print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CO2_v3.pptx")
-
-
-#### wrong_K means for dissolved gas ####
-
-#** CO2 ####
-
-WSP_CO2_dis <- WSP_both$CO2_Dissolved_Gas
-
-WSP_both_PCA_kmeans_CO2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =4, labels.size= 6, circle = TRUE) +
-    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CO2_dis)) +
-    scale_color_brewer(palette = "Dark2") + 
-    theme_classic() +
-    ylab("PC2 (19.3%)")+
-    xlab("PC1 (32.0%)") + 
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-WSP_both_PCA_kmeans_CO2
-ggsave("PCA_Kmeans_CO2.jpg", WSP_both_PCA_kmeans,
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-WSP_both_PCA_kmeans_editable_CO2 <- dml(ggobj = WSP_both_PCA_kmeans_CO2)
-WSP_both_PCA_kmeans_doc <- read_pptx()
-WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
-WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CO2,
-                                   location = ph_location_type(type = "body") )
-print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CO2.pptx")
-
-#** CH4 ####
-
-WSP_CH4_dis <- WSP_both$CH4_Dissolved_Gas
-
-WSP_both_PCA_kmeans_CH4 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
-    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CH4_dis)) +
-    scale_color_brewer(palette = "Dark2") + 
-    theme_classic() +
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    ylab("PC2 (19.3%)")+
-    xlab("PC1 (32.0%)") + 
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-WSP_both_PCA_kmeans_CH4
-ggsave("PCA_Kmeans_CH4.jpg", WSP_both_PCA_kmeans_CH4,
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-WSP_both_PCA_kmeans_editable_CH4 <- dml(ggobj = WSP_both_PCA_kmeans_CH4)
-WSP_both_PCA_kmeans_doc <- read_pptx()
-WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
-WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CH4,
-                                   location = ph_location_type(type = "body") )
-print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4.pptx")
-
-
-
-
-#### Try_RF for dissolved gas ####
-#** CO2 ####
-
-WSP_both_RF <- WSP_both[,c(7:9, 12, 15:27, 37)]
-WSP_labels <- str_split_fixed(colnames(WSP_both_RF), " \\(", n = 2)[,1]
-WSP_labels <- str_replace_all(WSP_labels, " ", "_")
-WSP_labels <- str_replace_all(WSP_labels, "-", "")
-WSP_labels <- str_replace_all(WSP_labels, "\\+", "")
-colnames(WSP_both_RF) <- WSP_labels
-
-trainTask_CO2_2 <- makeRegrTask(data = WSP_both_RF,target = "CO2_Dissolved_Gas")
-
-# create mlr learner
-set.seed(1234)
-lrn_CO2_2 <- makeLearner("regr.ranger")
-# lrn_CO2_2$par.vals <- list(ntree = 100L, importance = TRUE)
-cv_CO2_2 <- makeResampleDesc(method = "LOO")
-# set parallel backend
-parallelStartSocket(cpus = detectCores()-1)
-res_CO2_2 <- resample(learner = lrn_CO2_2, task = trainTask_CO2_2, resampling = cv_CO2_2)
-# Tuning hyperparameters
-
-# To know which hyperparameter can be tuned using getParamSet
-getParamSet(lrn_CO2_2)
-
-# Only tune three abovementioned hyperparameters
-
-params_CO2_2 <- makeParamSet(makeIntegerParam("mtry", lower = 2, upper = 10),
-                             makeIntegerParam("min.node.size", lower = 2, upper = 25))
-tc_CO2_2 <- makeTuneControlMBO(budget = 100)
-tr_CO2_2 <- tuneParams(learner = lrn_CO2_2, task = trainTask_CO2_2, resampling = cv_CO2_2,
-                       par.set = params_CO2_2, control = tc_CO2_2, show.info = TRUE)
-
-parallelStop()
-tr_CO2_2
-# Tune result:
-# Op. pars: mtry=5; min.node.size=11
-# mse.test.mean= 125097754.9690112
-# Apply the optimal RF
-
-# using ranger package with permutation feature importance
-set.seed(1234)
-regressor_CO2_2_opt_ranger <- ranger(formula = CO2_Dissolved_Gas~., data = WSP_both_RF, num.trees =  1000, mtry = 5, 
-                                     importance = 'permutation', min.node.size = 11) 
-imp_CO2_2_opt_per <- importance_pvalues(x = regressor_CO2_2_opt_ranger, method = 'janitza', num.permutations = 100)
-
-featureImportance_CO2_2_opt_per <- data.frame(Feature=row.names(imp_CO2_2_opt_per), Importance=imp_CO2_2_opt_per[,1], 
-                                              pvalue=imp_CO2_2_opt_per[,2])
-# remove the variables with pvalue >0.05
-featureImportance_CO2_2_opt_per <- featureImportance_CO2_2_opt_per %>% filter(pvalue <=0.05)
-
-labels_CO2_2_per <- c("DO", "Air ~ temperature", "pH", "Total ~ Dissolved ~ Solids", "PO[4]^3^-{}", "Solar ~ radiation",
-                      "BOD[5]", "Water ~ temperature", "Chlorophyll*~alpha", "Wind")
-labels_CO2_2_per <- rev(labels_CO2_2_per)
-labels_CO2_2_per_parse <- parse(text = labels_CO2_2_per)
-
-ggsave("RF_CO2_dis_opt_per.tiff", ggplot(featureImportance_CO2_2_opt_per, aes(x=reorder(Feature, Importance), y=Importance)) +
-           geom_bar(stat="identity", fill="tomato") +
-           coord_flip() + 
-           theme_bw(base_size=20) +
-           # scale_x_discrete(labels = labels_CO2_2_per_parse) +
-           # scale_y_continuous(labels = seq(from = 0.1, to = 0.6, length.out = 3)) +
-           labs(x = NULL, y = "Scale Importance") + 
-           ggtitle(bquote("C"*O[2]*"")) +
-           theme(plot.title=element_text(size=18)),
-       units = 'cm', height = 20, width = 20, dpi = 300)
-# the feature important variables are not similar the one from Flux
-
-#** CH4 ####
-
-WSP_both_RF <- WSP_both[,c(7:9, 12, 15:27, 36)]
-WSP_both_RF <- WSP_both_RF[-5,]
-WSP_labels <- str_split_fixed(colnames(WSP_both_RF), " \\(", n = 2)[,1]
-WSP_labels <- str_replace_all(WSP_labels, " ", "_")
-WSP_labels <- str_replace_all(WSP_labels, "-", "")
-WSP_labels <- str_replace_all(WSP_labels, "\\+", "")
-colnames(WSP_both_RF) <- WSP_labels
-
-trainTask_CH4_2 <- makeRegrTask(data = WSP_both_RF,target = "CH4_Dissolved_Gas")
-
-# create mlr learner
-set.seed(1234)
-lrn_CH4_2 <- makeLearner("regr.ranger")
-# lrn_CH4_2$par.vals <- list(ntree = 100L, importance = TRUE)
-cv_CH4_2 <- makeResampleDesc(method = "LOO")
-# set parallel backend
-parallelStartSocket(cpus = detectCores()-1)
-res_CH4_2 <- resample(learner = lrn_CH4_2, task = trainTask_CH4_2, resampling = cv_CH4_2)
-# Tuning hyperparameters
-
-# To know which hyperparameter can be tuned using getParamSet
-getParamSet(lrn_CH4_2)
-
-# Only tune three abovementioned hyperparameters
-
-params_CH4_2 <- makeParamSet(makeIntegerParam("mtry", lower = 2, upper = 10),
-                             makeIntegerParam("min.node.size", lower = 2, upper = 25))
-tc_CH4_2 <- makeTuneControlMBO(budget = 100)
-tr_CH4_2 <- tuneParams(learner = lrn_CH4_2, task = trainTask_CH4_2, resampling = cv_CH4_2,
-                       par.set = params_CH4_2, control = tc_CH4_2, show.info = TRUE)
-
-parallelStop()
-tr_CH4_2
-# Tune result:
-# Op. pars: mtry=9; min.node.size=14
-# mse.test.mean=20336.5695422
-# Apply the optimal RF
-
-# using ranger package with permutation feature importance
-set.seed(1234)
-regressor_CH4_2_opt_ranger <- ranger(formula = CH4_Dissolved_Gas~., data = WSP_both_RF, num.trees =  1000, mtry = 9, 
-                                     importance = 'permutation', min.node.size = 14) 
-imp_CH4_2_opt_per <- importance_pvalues(x = regressor_CH4_2_opt_ranger, method = 'janitza', num.permutations = 100)
-
-featureImportance_CH4_2_opt_per <- data.frame(Feature=row.names(imp_CH4_2_opt_per), Importance=imp_CH4_2_opt_per[,1], 
-                                              pvalue=imp_CH4_2_opt_per[,2])
-# remove the variables with pvalue >0.05
-featureImportance_CH4_2_opt_per <- featureImportance_CH4_2_opt_per %>% filter(pvalue <=0.05)
-
-labels_CH4_2_per <- c("BOD[5]", "Total ~ Dissolved ~ Solids", "Air ~ temperature", "DO", "pH", "Water ~ temperature", "TN", "COD",
-                      "PO[4]^3^-{}", "TP")
-labels_CH4_2_per <- rev(labels_CH4_2_per)
-labels_CH4_2_per_parse <- parse(text = labels_CH4_2_per)
-
-ggsave("RF_CH4_dis_opt_per.tiff", ggplot(featureImportance_CH4_2_opt_per[1:10,], aes(x=reorder(Feature, Importance), y=Importance)) +
-           geom_bar(stat="identity", fill="tomato") +
-           coord_flip() + 
-           theme_bw(base_size=20) +
-           # scale_x_discrete(labels = labels_CH4_2_per_parse) +
-           # scale_y_continuous(labels = seq(from = 0.1, to = 0.5, length.out = 5))+
-           labs(x = NULL, y = "Scale Importance") +
-           ggtitle(bquote("C"*H[4]*"")) +
-           theme(plot.title=element_text(size=18)),
-       units = 'cm', height = 20, width = 20, dpi = 300)
-# quite close but heavily depended on BOD5 ?
-
-
-
-
-
