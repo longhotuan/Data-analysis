@@ -319,7 +319,7 @@ ggsave("Fluxes_WSP_separation.tiff", WSP_fluxes_sep %>% ggplot(aes(x = Pond, y =
            geom_boxplot() +
            stat_summary(fun.y=mean, geom="point", shape=20, size=5, color="red", fill="red") +
            theme_bw()+
-           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           ylab(bquote("Fluxes (mg "*m^-2*" "*d^-1*")")) +
            facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
            scale_fill_brewer(palette = "Paired", name = "Ponds")+
            theme(text=element_text(size=14),
@@ -348,7 +348,7 @@ ggsave("Fluxes_WSP_24h.tiff", WSP_24h_fluxes %>% ggplot(aes(x = Pond, y = Fluxes
            geom_boxplot() +
            stat_summary(fun=mean, geom="point", shape=20, size=5, color="red", fill="red") +
            theme_bw()+
-           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           ylab(bquote("Fluxes (mg "*m^-2*" "*d^-1*")")) +
            facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
            scale_fill_brewer(palette = "Paired", name = "Ponds",
                              labels = c("Facultative Pond 2", "Maturation Pond 2"))+
@@ -383,7 +383,7 @@ ggsave("Fluxes_WSP_both_separation.tiff", WSP_both_sep %>% ggplot(aes(x = Pond, 
            geom_boxplot() +
            stat_summary(fun=mean, geom="point", shape=20, size=5, color="black", fill="black") +
            theme_bw()+
-           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           ylab(bquote("Fluxes (mg "*m^-2*" "*d^-1*")")) +
            facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
            scale_fill_brewer(palette = "Paired", name = "Ponds")+
            theme(text=element_text(size=14),
@@ -399,9 +399,15 @@ ggsave("Fluxes_WSP_both_separation.tiff", WSP_both_sep %>% ggplot(aes(x = Pond, 
 )
 
 #### Old_line_chart_WSP_24h ####
+WSP_24h_v2 <- read.csv("WSP_24h.csv")
+WSP_24h_v2$Time <- str_replace_all(WSP_24h_v2$Time, ":00", "")
+WSP_24h_v2$Time <- factor(WSP_24h_v2$Time, levels = c("0:22",  "1:20","3:22",  "4:10",  "5:09", "5:49",  "6:37", 
+                                                     "7:36",  "8:53",  "9:47", "10:24", "11:25", "12:26", "13:30", 
+                                                     "14:41", "15:36", "16:41", "17:41", "18:51", 
+                                                     "19:52", "2:35",  "21:10", "22:09", "23:12"))
+colnames(WSP_24h_v2) <- colnames(WSP_24h)[1:32]
 
-
-WSP_24h_line <- WSP_24h %>% select(Time, Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
+WSP_24h_line <- WSP_24h_v2 %>% dplyr::select(Time, Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
     pivot_longer(cols=c(-Pond, -Time),  names_to = "GHGs", values_to = "Fluxes")
 WSP_24h_line$Pond <- as.factor(WSP_24h_line$Pond)
 WSP_24h_line$Pond <- factor(WSP_24h_line$Pond,
@@ -412,12 +418,13 @@ WSP_24h_line$GHGs <- factor(WSP_24h_line$GHGs,
                               labels = c(expression("CO"["2"]), expression("CH"["4"]), 
                                          expression("N"["2"]*"O")))
 
+
 ggsave("Line_24h_CO2_fluxes.tiff", WSP_24h_line %>% 
            ggplot(aes(x = Time, y = Fluxes, group = GHGs)) +
            geom_line(aes(color = GHGs)) + 
            geom_point(aes(color = GHGs)) +
            theme_bw()+
-           ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
+           ylab(bquote("Fluxes (mg "*m^-2*" "*d^-1*")")) +
            facet_wrap(Pond ~ GHGs, scales = "free", labeller = labeller(GHGs = label_parsed))+
            scale_color_brewer(palette = "Dark2",)+
            theme(text=element_text(size=14),
@@ -625,7 +632,6 @@ WSP_fried_4 <- aggregate(data = WSP_fried, .~Position+Date, mean)
 WSP_fried_4 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Date|Position) #insignificant
 WSP_fried_4 %>% friedman_test(`Flux_CH4 (mg.m-2.d-1)`~Position|Date) #insignificant
 
-
 #* CO2 ####
 #** Pond + Line variability 
 
@@ -686,7 +692,6 @@ WSP_fried_4 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Date|Position) #insignific
 WSP_fried_4 %>% friedman_test(`Flux_NO2 (mg.m-2.d-1)`~Position|Date) #insignificant
 
 #### Wilcoxon signed-rank test ####
-# identify which groups were different
 #* CH4 ####
 WSP %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
 WSP %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Line, paired = TRUE, p.adjust.method = "bonferroni")
@@ -713,6 +718,11 @@ WSP_sta$log_CH4 <- log(WSP_sta$`Flux_CH4 (mg.m-2.d-1)`)
 WSP_sta$sta_CH4 <- standardize(WSP_sta$log_CH4) 
 WSP_sta$log_CO2 <- log(WSP_sta$`Flux_CO2 (mg.m-2.d-1)`)
 WSP_sta$sta_CO2 <- standardize(WSP_sta$log_CO2) 
+# Encoding categorical data
+WSP_sta$Pond <- factor(WSP_sta$Pond, levels = c('AP', 'FP', 'MP'),
+                       labels = c(1, 2, 3))
+
+
 # Pond and Line-no significance ####
 #* N2O #####
 # diagnostic outliers 
@@ -835,6 +845,54 @@ var_CH4 <- as.data.frame(VarCorr(WSP_lmm_CH4))
 ICC_Position_CH4 <- var_CH4$vcov[1]/sum(var_CH4$vcov)
 ICC_WSP2_CH4 <- (var_CH4$vcov[1] + var_CH4$vcov[2])/sum(var_CH4$vcov)
 
+#### Correct_Spatial analysis with Pond ####
+WSP_v2 <- WSP
+WSP_v2$Pond <- paste0(as.character(WSP$Pond), as.character(WSP$Line), sep = " ")
+
+WSP_sta_v2 <- WSP_v2
+WSP_sta_v2$log_N2O <- log(abs(WSP_sta_v2$`Flux_NO2 (mg.m-2.d-1)`))
+WSP_sta_v2$sta_N2O <- standardize(WSP_sta_v2$log_N2O) 
+WSP_sta_v2$log_CH4 <- log(WSP_sta_v2$`Flux_CH4 (mg.m-2.d-1)`)
+WSP_sta_v2$sta_CH4 <- standardize(WSP_sta_v2$log_CH4) 
+WSP_sta_v2$log_CO2 <- log(WSP_sta_v2$`Flux_CO2 (mg.m-2.d-1)`)
+WSP_sta_v2$sta_CO2 <- standardize(WSP_sta_v2$log_CO2) 
+
+
+WSP_lmm_N2O <- lmer(sta_N2O~1+(1|Pond), data = WSP_sta_v2)
+r.squaredGLMM(WSP_lmm_N2O)
+summary(WSP_lmm_N2O)
+vcov(WSP_lmm_N2O)
+var_N2O <- as.data.frame(VarCorr(WSP_lmm_N2O))
+ICC_WSP_N2O <- var_N2O$vcov[1]/sum(var_N2O$vcov) # 0.65
+
+WSP_lmm_CO2 <- lmer(sta_CO2~1+(1|Pond), data = WSP_sta_v2)
+r.squaredGLMM(WSP_lmm_CO2)
+summary(WSP_lmm_CO2)
+vcov(WSP_lmm_CO2)
+var_CO2 <- as.data.frame(VarCorr(WSP_lmm_CO2))
+ICC_WSP_CO2 <- var_CO2$vcov[1]/sum(var_CO2$vcov) # 0.59
+
+WSP_lmm_CH4 <- lmer(sta_CH4~1+(1|Pond), data = WSP_sta_v2)
+r.squaredGLMM(WSP_lmm_CH4)
+summary(WSP_lmm_CH4)
+vcov(WSP_lmm_CH4)
+var_CH4 <- as.data.frame(VarCorr(WSP_lmm_CH4))
+ICC_WSP_CH4 <- var_CH4$vcov[1]/sum(var_CH4$vcov) # 0.33
+
+# Kruskal Wallis
+
+river_dun_CH4 <- as.data.frame(dunn.test(WSP_v2$`Flux_CH4 (mg.m-2.d-1)`, WSP_v2$Pond, method = c("bonferroni")))[4:5]
+river_dun_CO2 <- as.data.frame(dunn.test(WSP_v2$`Flux_CO2 (mg.m-2.d-1)`, WSP_v2$Pond, method = c("bonferroni")))[4:5]
+river_dun_N2O <- as.data.frame(dunn.test(WSP_v2$`Flux_NO2 (mg.m-2.d-1)`, WSP_v2$Pond, method = c("bonferroni")))[4:5]
+
+
+# Wilcoxon signed rank test
+
+WSP_v2 %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
+WSP_v2 %>% wilcox_test(`Flux_CO2 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
+WSP_v2 %>% wilcox_test(`Flux_NO2 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
+
+
 #### PCA_WSP_both ####
 # use prcomp in the package MASS
 
@@ -922,6 +980,7 @@ WSP_both_kmeans <- kmeans(x = WSP_both_kmean, centers = 4)
 WSP_both_y_kmeans <- WSP_both_kmeans$cluster
 
 # Visualising the clusters
+tiff("cluster_sites.jpg",units = 'cm',height = 20,width = 20,res = 300, pointsize = 12)
 clusplot(WSP_both_kmean,
          WSP_both_y_kmeans,
          lines = 0,
@@ -933,7 +992,7 @@ clusplot(WSP_both_kmean,
          main = paste('Clusters of customers'),
          xlab = 'PC1',
          ylab = 'PC2')
-
+dev.off()
 #** CO2 ####
 
 WSP_both_PCA_kmeans_CO2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =4, labels.size= 6, circle = TRUE) +
@@ -986,94 +1045,6 @@ WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kme
                                    location = ph_location_type(type = "body") )
 print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4.pptx")
 
-
-#** wrong_using K means to classify CO2 and CH4 ####
-
-WSP_both_kmean <- WSP_both %>% select(`Flux_CO2 (mg.m-2.d-1)`,`Flux_CH4 (mg.m-2.d-1)`)
-
-# Using the elbow method to find the optimal number of clusters
-
-set.seed(1)
-wcss <- vector()
-for (i in 1:10) wcss[i] <- sum(kmeans(WSP_both_kmean, i)$withinss)
-plot(1:10,
-     wcss,
-     type = 'b',
-     main = paste('The Elbow Method'),
-     xlab = 'Number of clusters',
-     ylab = 'WCSS')
-
-# Fitting K-Means to the dataset
-
-set.seed(10)
-WSP_both_kmeans <- kmeans(x = WSP_both_kmean, centers = 4, iter.max = 1000, nstart = 10)
-WSP_both_y_kmeans <- WSP_both_kmeans$cluster
-
-# Visualising the clusters
-clusplot(WSP_both_kmean,
-         WSP_both_y_kmeans,
-         lines = 0,
-         shade = TRUE,
-         color = TRUE,
-         labels = 2,
-         plotchar = FALSE,
-         span = TRUE,
-         main = paste('Clusters of customers'),
-         xlab = 'PC1',
-         ylab = 'PC2')
-
-labels_WSP_kmeans <- paste(WSP_both$Pond)
-
-#** CO2 ####
-WSP_both_PCA_kmeans_CO2_v2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =0, labels.size= 6) +
-    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CO2)) +
-    scale_color_brewer(palette = "Dark2") + 
-    theme_classic() +
-    ylab("PC2 (19.2%)")+
-    xlab("PC1 (31.8%)") + 
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-
-ggsave("PCA_Kmeans_CO2_v2.jpeg", WSP_both_PCA_kmeans_CO2_v2,
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-WSP_both_PCA_kmeans_editable_CO2_v2 <- dml(ggobj = WSP_both_PCA_kmeans_CO2_v2)
-WSP_both_PCA_kmeans_doc <- read_pptx()
-WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
-WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CO2_v2,
-                                   location = ph_location_type(type = "body") )
-print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CO2_v2.pptx")
-
-#** CH4 ####
-
-WSP_both_PCA_kmeans_CH4_v2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
-    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CH4)) +
-    scale_color_brewer(palette = "Dark2") + 
-    theme_classic() +
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    ylab("PC2 (19.2%)")+
-    xlab("PC1 (31.8%)") + 
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-
-ggsave("PCA_Kmeans_CH4_v2.jpeg", WSP_both_PCA_kmeans_CH4,
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-WSP_both_PCA_kmeans_editable_CH4_v2 <- dml(ggobj = WSP_both_PCA_kmeans_CH4_v2)
-WSP_both_PCA_kmeans_doc <- read_pptx()
-WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
-WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CH4_v2,
-                                   location = ph_location_type(type = "body"))
-print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4_v2.pptx")
 
 #### correct_RF (hyperparameter tuning) ####
 #** CO2 ####
@@ -1217,3 +1188,4 @@ ggsave("RF_CH4_2_opt_per.tiff", ggplot(featureImportance_CH4_2_opt_per[1:10,], a
            ggtitle(bquote("C"*H[4]*"")) +
            theme(plot.title=element_text(size=18)),
        units = 'cm', height = 20, width = 20, dpi = 300)
+
