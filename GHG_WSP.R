@@ -1,18 +1,4 @@
 #### import libraries ####
-# data wrangling
-
-library(tidyverse)
-library(reshape)
-library(data.table)
-library(xlsx)
-library(gridExtra)
-library(grid)
-library(chron)
-library(devtools)
-library(SOfun)
-library(usethis)
-library(reprex)
-library(lubridate)
 
 # data visualization 
 
@@ -69,7 +55,20 @@ library(clue)
 library(parallel)
 library(parallelMap)
 
+# data wrangling
 
+library(tidyverse)
+library(reshape)
+library(data.table)
+library(xlsx)
+library(gridExtra)
+library(grid)
+library(chron)
+library(devtools)
+library(SOfun)
+library(usethis)
+library(reprex)
+library(lubridate)
 
 #### import data #### 
 
@@ -94,11 +93,11 @@ WSP_24h$Pond <- as.factor(WSP_24h$Pond)
 WSP_24h$Line <- as.factor(WSP_24h$Line)
 WSP_24h$Position <- as.factor(WSP_24h$Position)
 WSP_24h$Sample <- as.factor(WSP_24h$Sample)
-
-WSP$Date <- dmy(WSP$Date)
-WSP$Time <- hms(WSP$Time)
-WSP_24h$Date <- dmy(WSP_24h$Date)
-WSP_24h$Time <- hms(WSP_24h$Time)
+# 
+# WSP$Date <- dmy(WSP$Date)
+# WSP$Time <- hms(WSP$Time)
+# WSP_24h$Date <- dmy(WSP_24h$Date)
+# WSP_24h$Time <- hms(WSP_24h$Time)
 
 
 # FP2 position 3 with mean value
@@ -272,7 +271,7 @@ WSP_both$Sample <- as.factor(WSP_both$Sample)
 #### Correct_Boxplot_Fluxes per ponds ####
 #** WSP no separation ####
 
-WSP_fluxes <- WSP %>% select(Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
+WSP_fluxes <- WSP %>% dplyr::select(Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
     pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
 WSP_fluxes$GHGs <- as.factor(WSP_fluxes$GHGs)
 WSP_fluxes$GHGs <- relevel(WSP_fluxes$GHGs,"Flux_CO2 (mg.m-2.d-1)")
@@ -282,7 +281,7 @@ WSP_fluxes$GHGs <- factor(WSP_fluxes$GHGs,
 
 ggsave("Fluxes_WSP.tiff", WSP_fluxes %>% ggplot(aes(x = Pond, y = Fluxes, fill = Pond)) +
            geom_boxplot() +
-           stat_summary(fun.y=mean, geom="point", shape=20, size=5, color="red", fill="red") +
+           stat_summary(fun=mean, geom="point", shape=20, size=5, color="red", fill="red") +
            theme_bw()+
            ylab(bquote("Fluxes (mg."*m^-2*"."*d^-1*")")) +
            facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
@@ -300,9 +299,39 @@ ggsave("Fluxes_WSP.tiff", WSP_fluxes %>% ggplot(aes(x = Pond, y = Fluxes, fill =
        units = 'cm', height = 15, width = 30, dpi = 300
 )
 
+#** WSP no separation dissolved gas ####
+
+WSP_fluxes_2 <- WSP %>% dplyr::select(Pond, "CO2 Dissolved Gas (ug/L)","CH4 Dissolved Gas (ug/L)","N2O Dissolved Gas (ug/L)") %>%
+    pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "fluxes_2")
+WSP_fluxes_2$GHGs <- as.factor(WSP_fluxes_2$GHGs)
+WSP_fluxes_2$GHGs <- relevel(WSP_fluxes_2$GHGs,"CO2 Dissolved Gas (ug/L)")
+WSP_fluxes_2$GHGs <- factor(WSP_fluxes_2$GHGs,
+                          labels = c(expression("CO"["2"]), expression("CH"["4"]), 
+                                     expression("N"["2"]*"O")))
+
+ggsave("Dissolved_gas_WSP.tiff", WSP_fluxes_2 %>% ggplot(aes(x = Pond, y = fluxes_2, fill = Pond)) +
+           geom_boxplot() +
+           stat_summary(fun=mean, geom="point", shape=20, size=5, color="red", fill="red") +
+           theme_bw()+
+           ylab(bquote("Dissolved gas concentrations ("*mu*"g."*L^-1*")")) +
+           facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
+           scale_fill_brewer(palette = "Paired", name = "Ponds",
+                             labels = c("Aerated Ponds", "Facultative Ponds", "Maturation Ponds"))+
+           theme(text=element_text(size=14),
+                 strip.text.x = element_text(size=14),
+                 axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank(),
+                 axis.title.x = element_blank(),
+                 legend.position="right",
+                 legend.title = element_text(size = 14),
+                 legend.text = element_text(size = 12),
+                 legend.spacing.x = unit(0.5, 'cm')), 
+       units = 'cm', height = 15, width = 30, dpi = 300
+)
+
 #** WSP with separation ####
 
-WSP_fluxes_sep <- WSP %>% select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
+WSP_fluxes_sep <- WSP %>% dplyr::select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
 WSP_fluxes_sep$Pond <- paste(WSP$Pond, WSP$Line, sep = " ")
 WSP_fluxes_sep <- WSP_fluxes_sep %>%  pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
 WSP_fluxes_sep$Pond <- as.factor(WSP_fluxes_sep$Pond)
@@ -317,7 +346,7 @@ WSP_fluxes_sep$GHGs <- factor(WSP_fluxes_sep$GHGs,
 
 ggsave("Fluxes_WSP_separation.tiff", WSP_fluxes_sep %>% ggplot(aes(x = Pond, y = Fluxes, fill = Pond)) +
            geom_boxplot() +
-           stat_summary(fun.y=mean, geom="point", shape=20, size=5, color="red", fill="red") +
+           stat_summary(fun=mean, geom="point", shape=20, size=5, color="red", fill="red") +
            theme_bw()+
            ylab(bquote("Fluxes (mg "*m^-2*" "*d^-1*")")) +
            facet_wrap(.~ GHGs, scales = "free", labeller = label_parsed) +
@@ -336,7 +365,7 @@ ggsave("Fluxes_WSP_separation.tiff", WSP_fluxes_sep %>% ggplot(aes(x = Pond, y =
 
 #** WSP_24h ####
 
-WSP_24h_fluxes <- WSP_24h %>% select(Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
+WSP_24h_fluxes <- WSP_24h %>% dplyr::select(Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
     pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
 WSP_24h_fluxes$GHGs <- as.factor(WSP_24h_fluxes$GHGs)
 WSP_24h_fluxes$GHGs <- relevel(WSP_24h_fluxes$GHGs,"Flux_CO2 (mg.m-2.d-1)")
@@ -366,7 +395,7 @@ ggsave("Fluxes_WSP_24h.tiff", WSP_24h_fluxes %>% ggplot(aes(x = Pond, y = Fluxes
 
 #** WSP_both ####
 
-WSP_both_sep <- WSP_both %>% select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
+WSP_both_sep <- WSP_both %>% dplyr::select("Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)")
 WSP_both_sep$Pond <- paste(WSP_both$Pond, WSP_both$Line, sep = " ")
 WSP_both_sep <- WSP_both_sep %>%  pivot_longer(cols = -Pond, names_to = "GHGs", values_to = "Fluxes")
 WSP_both_sep$Pond <- as.factor(WSP_both_sep$Pond)
@@ -399,13 +428,10 @@ ggsave("Fluxes_WSP_both_separation.tiff", WSP_both_sep %>% ggplot(aes(x = Pond, 
 )
 
 #### Old_line_chart_WSP_24h ####
-WSP_24h_v2 <- read.csv("WSP_24h.csv")
-WSP_24h_v2$Time <- str_replace_all(WSP_24h_v2$Time, ":00", "")
-WSP_24h_v2$Time <- factor(WSP_24h_v2$Time, levels = c("0:22",  "1:20","3:22",  "4:10",  "5:09", "5:49",  "6:37", 
-                                                     "7:36",  "8:53",  "9:47", "10:24", "11:25", "12:26", "13:30", 
-                                                     "14:41", "15:36", "16:41", "17:41", "18:51", 
-                                                     "19:52", "2:35",  "21:10", "22:09", "23:12"))
-colnames(WSP_24h_v2) <- colnames(WSP_24h)[1:32]
+WSP_24h_v2 <- WSP_24h
+# WSP_24h_v2$Time <- str_replace_all(WSP_24h_v2$Time, ":00", "")
+# WSP_24h_v2$Time <- as.factor(WSP_24h_v2$Time)
+#** 24 line fluxes ####
 
 WSP_24h_line <- WSP_24h_v2 %>% dplyr::select(Time, Pond, "Flux_CO2 (mg.m-2.d-1)","Flux_CH4 (mg.m-2.d-1)","Flux_NO2 (mg.m-2.d-1)") %>%
     pivot_longer(cols=c(-Pond, -Time),  names_to = "GHGs", values_to = "Fluxes")
@@ -418,21 +444,91 @@ WSP_24h_line$GHGs <- factor(WSP_24h_line$GHGs,
                               labels = c(expression("CO"["2"]), expression("CH"["4"]), 
                                          expression("N"["2"]*"O")))
 
-
-ggsave("Line_24h_CO2_fluxes.tiff", WSP_24h_line %>% 
-           ggplot(aes(x = Time, y = Fluxes, group = GHGs)) +
+ggsave("Line_24h_CO2_fluxes_v2.tiff", WSP_24h_line %>% 
+           ggplot(aes(x =  as.POSIXct(Time), y = Fluxes, group = GHGs)) +
            geom_line(aes(color = GHGs)) + 
            geom_point(aes(color = GHGs)) +
            theme_bw()+
            ylab(bquote("Fluxes (mg "*m^-2*" "*d^-1*")")) +
-           facet_wrap(Pond ~ GHGs, scales = "free", labeller = labeller(GHGs = label_parsed))+
+           scale_x_datetime(date_labels = "%H:%M")+
+           facet_wrap(Pond ~ GHGs, scales = "free_y", labeller = labeller(GHGs = label_parsed))+
            scale_color_brewer(palette = "Dark2",)+
-           theme(text=element_text(size=14),
-                 strip.text.x = element_text(size=14),
-                 axis.text.x = element_text(size=12),
+           theme(text=element_text(size=18),
+                 strip.text.x = element_text(size=18),
+                 axis.text.x = element_text(size=16),
                  axis.title.x = element_blank(),
                  legend.position = "none")
        , units = 'cm', height = 20, width = 50,dpi = 300)
+
+#** 24 line dissolved gas ####
+
+WSP_24h_line_2 <- WSP_24h_v2 %>% dplyr::select(Time, Pond, "CO2 Dissolved Gas (ug/L)","CH4 Dissolved Gas (ug/L)","N2O Dissolved Gas (ug/L)") %>%
+    pivot_longer(cols=c(-Pond, -Time),  names_to = "GHGs", values_to = "Fluxes")
+WSP_24h_line_2$Pond <- as.factor(WSP_24h_line_2$Pond)
+WSP_24h_line_2$Pond <- factor(WSP_24h_line_2$Pond,
+                            labels = c("Facultative Pond", "Maturation Pond"))
+WSP_24h_line_2$GHGs <- as.factor(WSP_24h_line_2$GHGs)
+WSP_24h_line_2$GHGs <- relevel(WSP_24h_line_2$GHGs,"CO2 Dissolved Gas (ug/L)")
+WSP_24h_line_2$GHGs <- factor(WSP_24h_line_2$GHGs,
+                            labels = c(expression("CO"["2"]), expression("CH"["4"]), 
+                                       expression("N"["2"]*"O")))
+
+ggsave("Line_24h_Dissolved_gases.tiff", WSP_24h_line_2 %>% 
+           ggplot(aes(x =  as.POSIXct(Time), y = Fluxes, group = GHGs)) +
+           geom_line(aes(color = GHGs)) + 
+           geom_point(aes(color = GHGs)) +
+           theme_bw()+
+           ylab(bquote("Dissolved gas concentrations ("*mu*"g."*L^-1*")")) +
+           scale_x_datetime(date_labels = "%H:%M")+
+           facet_wrap(Pond ~ GHGs, scales = "free_y", labeller = labeller(GHGs = label_parsed))+
+           scale_color_brewer(palette = "Dark2",)+
+           theme(text=element_text(size=18),
+                 strip.text.x = element_text(size=18),
+                 axis.text.x = element_text(size=16),
+                 axis.title.x = element_blank(),
+                 legend.position = "none")
+       , units = 'cm', height = 20, width = 50,dpi = 300)
+
+#** Line chart of all countinuous variables regarding times ####
+# This is for make a list of graphs
+
+line_aday <- function(data, column){
+    column2 <- ensym(column)
+    ggplot(data, aes(x = Time, y = !!column2, group = Pond)) +
+        geom_line(aes(color = Pond)) + 
+        geom_point(aes(color = Pond)) +
+        theme_bw()+
+        scale_color_brewer(palette = "Dark2",)+
+        theme(text=element_text(size=14),
+              strip.text.x = element_text(size=14),
+              axis.text.x = element_text(size=12),
+              axis.title.x = element_blank())
+}
+
+line_pond <- lapply(colnames(WSP_24h)[6:26], line_aday, data = WSP_24h)
+
+map2()
+
+# Put graphs with similar variables together
+
+ggsave("Line_chart_1.tiff",marrangeGrob(line_pond[1:4],nrow = 2, ncol= 2, top = '')
+       , units = 'cm', height = 20, width = 60,dpi = 300)
+
+ggsave("Line_chart_2.tiff",marrangeGrob(line_pond[5:8],nrow = 2, ncol= 2, top = '')
+       , units = 'cm', height = 20, width = 60,dpi = 300)
+
+ggsave("Line_chart_3.tiff",marrangeGrob(line_pond[9:11],nrow = 2, ncol= 2, top = '')
+       , units = 'cm', height = 20, width = 60,dpi = 300)
+
+ggsave("Line_chart_4.tiff",marrangeGrob(line_pond[12:15],nrow = 2, ncol= 2, top = '')
+       , units = 'cm', height = 20, width = 60,dpi = 300)
+
+ggsave("Line_chart_5.tiff",marrangeGrob(line_pond[16:17],nrow = 1, ncol= 2, top = '')
+       , units = 'cm', height = 8, width = 30,dpi = 300)
+
+ggsave("Line_chart_6.tiff",marrangeGrob(line_pond[18:21],nrow = 2, ncol= 2, top = '')
+       , units = 'cm', height = 20, width = 60,dpi = 300)
+
 
 #### Correct_summarise flux in each pond ####
 #** WSP with separation ####
@@ -892,161 +988,7 @@ WSP_v2 %>% wilcox_test(`Flux_CH4 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.me
 WSP_v2 %>% wilcox_test(`Flux_CO2 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
 WSP_v2 %>% wilcox_test(`Flux_NO2 (mg.m-2.d-1)`~ Pond, paired = TRUE, p.adjust.method = "bonferroni")
 
-
-#### PCA_WSP_both ####
-# use prcomp in the package MASS
-
-WSP_both_PCA <- WSP_both[,c(7:8, 10, 12, 15:27)]
-WSP_labels <- str_split_fixed(colnames(WSP_both_PCA), " \\(", n = 2)[,1]
-WSP_labels <- str_replace_all(WSP_labels, " ", "_")
-WSP_labels <- str_replace_all(WSP_labels, "-", "")
-WSP_labels <- str_replace_all(WSP_labels, "\\+", "")
-colnames(WSP_both_PCA) <- WSP_labels
-
-WSP_cor <- cor(WSP_both_PCA, use = "na.or.complete")
-
-WSP_both_PCA_2 <- prcomp(WSP_both_PCA, scale. = TRUE)
-
-WSP_both_PCA_2
-summary(WSP_both_PCA_2)
-
-# Eigenvectors (= matrix U)
-WSP_both_PCA_2$rotation
-
-# Component matrix (= matrix A)
-WSP_both_PCA_2$rotation %*% diag(WSP_both_PCA_2$sdev)
-
-#' Component scores (= matrix C)
-WSP_both_PCA_2$x
-head(WSP_both_PCA_2$x)
-
-# Scree plot
-ggscreeplot(WSP_both_PCA_2) + geom_col()
-
-# Biplot
-WSP_CO2 <- WSP_both$`Flux_CO2`
-WSP_CH4 <- WSP_both$`Flux_CH4`
-WSP_Pond <- as.factor(WSP_both$Pond)
-
-#** CO2 ####
-
-ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
-    geom_point(aes(color = WSP_CO2 , shape = WSP_Pond, size = WSP_CO2)) +
-    scale_color_gradient(low = "blue", high = "red") + 
-    theme_classic() +
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-
-#** CH4 ####
-
-ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
-    geom_point(aes(color = WSP_CH4 , shape = WSP_Pond, size = WSP_CH4)) +
-    scale_color_gradient(low = "blue", high = "red") + 
-    theme_classic() +
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-
-#### correct_K means_stats clusering (no hyperparameter tuning) ####
-#** correct_using K means to classify PC1 and PC2 ####
-
-WSP_both_kmean <- WSP_both_PCA_2$x[,1:2]
-
-# Using the elbow method to find the optimal number of clusters
-
-set.seed(1)
-wcss <- vector()
-for (i in 1:10) wcss[i] <- sum(kmeans(WSP_both_kmean, i)$withinss)
-plot(1:10,
-     wcss,
-     type = 'b',
-     main = paste('The Elbow Method'),
-     xlab = 'Number of clusters',
-     ylab = 'WCSS')
-
-# Fitting K-Means to the dataset
-
-set.seed(10)
-WSP_both_kmeans <- kmeans(x = WSP_both_kmean, centers = 4)
-WSP_both_y_kmeans <- WSP_both_kmeans$cluster
-
-# Visualising the clusters
-tiff("cluster_sites.jpg",units = 'cm',height = 20,width = 20,res = 300, pointsize = 12)
-clusplot(WSP_both_kmean,
-         WSP_both_y_kmeans,
-         lines = 0,
-         shade = TRUE,
-         color = TRUE,
-         labels = 2,
-         plotchar = FALSE,
-         span = TRUE,
-         main = paste('Clusters of customers'),
-         xlab = 'PC1',
-         ylab = 'PC2')
-dev.off()
-#** CO2 ####
-
-WSP_both_PCA_kmeans_CO2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =4, labels.size= 6, circle = TRUE) +
-    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CO2)) +
-    scale_color_brewer(palette = "Dark2") + 
-    theme_classic() +
-    ylab("PC2 (19.3%)")+
-    xlab("PC1 (32.0%)") + 
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-WSP_both_PCA_kmeans_CO2
-ggsave("PCA_Kmeans_CO2.jpg", WSP_both_PCA_kmeans,
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-WSP_both_PCA_kmeans_editable_CO2 <- dml(ggobj = WSP_both_PCA_kmeans_CO2)
-WSP_both_PCA_kmeans_doc <- read_pptx()
-WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
-WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CO2,
-               location = ph_location_type(type = "body") )
-print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CO2.pptx")
-
-#** CH4 ####
-
-WSP_both_PCA_kmeans_CH4 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
-    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CH4)) +
-    scale_color_brewer(palette = "Dark2") + 
-    theme_classic() +
-    scale_x_continuous(limits=c(-5,5)) +
-    scale_y_continuous(limits=c(-5,5)) +
-    ylab("PC2 (19.3%)")+
-    xlab("PC1 (32.0%)") + 
-    theme(text=element_text(size=14),
-          legend.position="right",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          legend.spacing.x = unit(0.5, 'cm'))
-WSP_both_PCA_kmeans_CH4
-ggsave("PCA_Kmeans_CH4.jpg", WSP_both_PCA_kmeans_CH4,
-       units = 'cm', height = 20, width = 20, dpi = 300)
-
-WSP_both_PCA_kmeans_editable_CH4 <- dml(ggobj = WSP_both_PCA_kmeans_CH4)
-WSP_both_PCA_kmeans_doc <- read_pptx()
-WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
-WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CH4,
-                                   location = ph_location_type(type = "body") )
-print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4.pptx")
-
-
-#### correct_RF (hyperparameter tuning) ####
+#### Correct_RF (hyperparameter tuning) ####
 #** CO2 ####
 
 WSP_both_RF <- WSP_both[,c(7, 8, 10, 12, 15:28)]
@@ -1188,4 +1130,162 @@ ggsave("RF_CH4_2_opt_per.tiff", ggplot(featureImportance_CH4_2_opt_per[1:10,], a
            ggtitle(bquote("C"*H[4]*"")) +
            theme(plot.title=element_text(size=18)),
        units = 'cm', height = 20, width = 20, dpi = 300)
+
+
+#### PCA_WSP_both ####
+# use prcomp in the package MASS
+
+WSP_both_PCA <- WSP_both[,c(7:8, 10, 12, 15:27)]
+WSP_labels <- str_split_fixed(colnames(WSP_both_PCA), " \\(", n = 2)[,1]
+WSP_labels <- str_replace_all(WSP_labels, " ", "_")
+WSP_labels <- str_replace_all(WSP_labels, "-", "")
+WSP_labels <- str_replace_all(WSP_labels, "\\+", "")
+colnames(WSP_both_PCA) <- WSP_labels
+
+WSP_cor <- cor(WSP_both_PCA, use = "na.or.complete")
+
+WSP_both_PCA_2 <- prcomp(WSP_both_PCA, scale. = TRUE)
+
+WSP_both_PCA_2
+summary(WSP_both_PCA_2)
+
+# Eigenvectors (= matrix U)
+WSP_both_PCA_2$rotation
+
+# Component matrix (= matrix A)
+WSP_both_PCA_2$rotation %*% diag(WSP_both_PCA_2$sdev)
+
+#' Component scores (= matrix C)
+WSP_both_PCA_2$x
+head(WSP_both_PCA_2$x)
+
+# Scree plot
+ggscreeplot(WSP_both_PCA_2) + geom_col()
+
+# Biplot
+WSP_CO2 <- WSP_both$`Flux_CO2`
+WSP_CH4 <- WSP_both$`Flux_CH4`
+WSP_Pond <- as.factor(WSP_both$Pond)
+
+#** CO2 ####
+
+ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
+    geom_point(aes(color = WSP_CO2 , shape = WSP_Pond, size = WSP_CO2)) +
+    scale_color_gradient(low = "blue", high = "red") + 
+    theme_classic() +
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+#** CH4 ####
+
+ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
+    geom_point(aes(color = WSP_CH4 , shape = WSP_Pond, size = WSP_CH4)) +
+    scale_color_gradient(low = "blue", high = "red") + 
+    theme_classic() +
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+
+
+#### correct_K means_stats clusering (no hyperparameter tuning) ####
+#** correct_using K means to classify PC1 and PC2 ####
+
+WSP_both_kmean <- WSP_both_PCA_2$x[,1:2]
+
+# Using the elbow method to find the optimal number of clusters
+
+set.seed(1)
+wcss <- vector()
+for (i in 1:10) wcss[i] <- sum(kmeans(WSP_both_kmean, i)$withinss)
+plot(1:10,
+     wcss,
+     type = 'b',
+     main = paste('The Elbow Method'),
+     xlab = 'Number of clusters',
+     ylab = 'WCSS')
+
+# Fitting K-Means to the dataset
+
+set.seed(10)
+WSP_both_kmeans <- kmeans(x = WSP_both_kmean, centers = 4)
+WSP_both_y_kmeans <- WSP_both_kmeans$cluster
+
+# Visualising the clusters
+tiff("cluster_sites.jpg",units = 'cm',height = 20,width = 20,res = 300, pointsize = 12)
+clusplot(WSP_both_kmean,
+         WSP_both_y_kmeans,
+         lines = 0,
+         shade = TRUE,
+         color = TRUE,
+         labels = 2,
+         plotchar = FALSE,
+         span = TRUE,
+         main = paste('Clusters of customers'),
+         xlab = 'PC1',
+         ylab = 'PC2')
+dev.off()
+#** CO2 ####
+
+WSP_both_PCA_kmeans_CO2 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size =4, labels.size= 6, circle = TRUE) +
+    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CO2)) +
+    scale_color_brewer(palette = "Dark2") + 
+    theme_classic() +
+    ylab("PC2 (19.3%)")+
+    xlab("PC1 (32.0%)") + 
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+WSP_both_PCA_kmeans_CO2
+ggsave("PCA_Kmeans_CO2.jpg", WSP_both_PCA_kmeans,
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+WSP_both_PCA_kmeans_editable_CO2 <- dml(ggobj = WSP_both_PCA_kmeans_CO2)
+WSP_both_PCA_kmeans_doc <- read_pptx()
+WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
+WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CO2,
+               location = ph_location_type(type = "body") )
+print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CO2.pptx")
+
+#** CH4 ####
+
+WSP_both_PCA_kmeans_CH4 <- ggbiplot(WSP_both_PCA_2, obs.scale = 1, var.scale = 1, alpha=0, varname.size = 4, labels.size= 6) +
+    geom_point(aes(color =  as.factor(WSP_both_kmeans$cluster) , shape = WSP_Pond, size = WSP_CH4)) +
+    scale_color_brewer(palette = "Dark2") + 
+    theme_classic() +
+    scale_x_continuous(limits=c(-5,5)) +
+    scale_y_continuous(limits=c(-5,5)) +
+    ylab("PC2 (19.3%)")+
+    xlab("PC1 (32.0%)") + 
+    theme(text=element_text(size=14),
+          legend.position="right",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 12),
+          legend.spacing.x = unit(0.5, 'cm'))
+WSP_both_PCA_kmeans_CH4
+ggsave("PCA_Kmeans_CH4.jpg", WSP_both_PCA_kmeans_CH4,
+       units = 'cm', height = 20, width = 20, dpi = 300)
+
+WSP_both_PCA_kmeans_editable_CH4 <- dml(ggobj = WSP_both_PCA_kmeans_CH4)
+WSP_both_PCA_kmeans_doc <- read_pptx()
+WSP_both_PCA_kmeans_doc <- add_slide(WSP_both_PCA_kmeans_doc)
+WSP_both_PCA_kmeans_doc <- ph_with(x = WSP_both_PCA_kmeans_doc, WSP_both_PCA_kmeans_editable_CH4,
+                                   location = ph_location_type(type = "body") )
+print(WSP_both_PCA_kmeans_doc, target = "WSP_both_PCA_kmeans_CH4.pptx")
+
+# Plot the clusters in different variables
+
+
 
